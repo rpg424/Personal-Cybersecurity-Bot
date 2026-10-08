@@ -1,0 +1,105 @@
+{
+  "product_name": "Personal Cybersecurity Bot",
+  "theme": "Light Color Theme (Warm Slate & Emerald WCAG AA)",
+  "generated_at_utc": "2026-09-28T02:07:00.000Z",
+  "architecture": {
+    "desktop_shell": "Tauri v2 (Documented in ADR-001)",
+    "local_service": "Java 21 / Spring Boot 3 Authority & Express 127.0.0.1 IPC Bridge",
+    "renderer": "React 19 / TypeScript 5 / Tailwind CSS v4 / TanStack Query (Light Theme)",
+    "persistence": "SQLite 3 with AES-256-GCM and Win32 DPAPI Key Hierarchy",
+    "cloud_ai": "Google GenAI SDK (Server-Side Only, Opt-in)"
+  },
+  "requirements": [
+    {
+      "id": "REQ-01",
+      "name": "Untrusted Renderer & Authenticated Localhost IPC",
+      "status": "VERIFIED",
+      "evidence": "Bearer token enforcement on loopback 127.0.0.1; DNS rebinding defense; renderer has zero direct OS execution privileges.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-02",
+      "name": "Electron vs Tauri Decision Record",
+      "status": "VERIFIED",
+      "evidence": "Documented in /docs/ADR_001_ELECTRON_VS_TAURI.md across 10 mandatory criteria.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-03",
+      "name": "Consent-Based Onboarding & Local Enrollment",
+      "status": "VERIFIED",
+      "evidence": "Interactive enrollment wizard in UI and /api/v1/enrollment endpoint with persistent token creation.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-03-AUTH",
+      "name": "Console Lock & Device Owner Login Page",
+      "status": "VERIFIED",
+      "evidence": "LoginPage component with PIN authentication, brute-force lockout, session validation, and shared-PC protection.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-04",
+      "name": "Protection Status Model (green/yellow/red/unknown)",
+      "status": "VERIFIED",
+      "evidence": "Deterministic precedence engine implemented in /api/v1/status with sentence-level explanations in light theme.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-05",
+      "name": "Telemetry Adapters (Process, Network, Download, File, USB)",
+      "status": "MOCKED",
+      "evidence": "Verified synthetic telemetry adapter interfaces with explicit MOCKED / SAFE SIMULATION markers in Linux container sandbox.",
+      "unresolved_risks": "Live Windows ETW/WFP requires physical Windows host with kernel permissions."
+    },
+    {
+      "id": "REQ-06",
+      "name": "Versioned Detector Registry & Inert Synthetic Fixtures",
+      "status": "VERIFIED",
+      "evidence": "Registry with versioned rules (LOLBin certutil, ransomware canary trip, phishing homograph) tested with inert synthetic fixtures.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-07",
+      "name": "Explainable Alert Detail, Timeline & Audit History",
+      "status": "VERIFIED",
+      "evidence": "Alert detail drawer with plain English summaries, evidence tables, confidence rationales, and causal event replay.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-08",
+      "name": "Sensitive Action Preview, Authorization & Idempotency",
+      "status": "VERIFIED",
+      "evidence": "Full state machine (preview -> await confirm -> authorize -> executing -> succeeded/failed) with idempotency cache and rollback support.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-09",
+      "name": "Offline Persistence, Retention, Export & Delete",
+      "status": "VERIFIED",
+      "evidence": "SQLite schema documented in /docs/DATABASE_SCHEMA_AND_MIGRATION.md; export/delete API endpoints functional.",
+      "unresolved_risks": "Win32 DPAPI requires native Windows host; fallback software derivation used in Linux sandbox."
+    },
+    {
+      "id": "REQ-10",
+      "name": "Panic Flow with Honest Scope and Recovery",
+      "status": "VERIFIED",
+      "evidence": "Network isolation with loopback preservation, impact warning dialog, and instant 1-click restore.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-11",
+      "name": "Accessible Desktop Console (Light Theme, WCAG AA, Scaling)",
+      "status": "VERIFIED",
+      "evidence": "High contrast light surfaces (#f8fafc / #ffffff), paired text/icon semantics, high contrast focus rings, ARIA live regions, keyboard navigation.",
+      "unresolved_risks": "None"
+    },
+    {
+      "id": "REQ-12",
+      "name": "Performance Budgets & Release Artifacts",
+      "status": "PARTIALLY VERIFIED",
+      "evidence": "Simulation test harness confirms <2% idle CPU and alert delivery <300ms in sandbox; physical Windows hardware benchmark marked NOT VERIFIED.",
+      "unresolved_risks": "Physical hardware profiling required on OEM Windows PC."
+    }
+  ]
+}
