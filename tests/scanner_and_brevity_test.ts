@@ -15,6 +15,8 @@ const sampleNodeWithPort445: FleetNode = {
   safetyScore: 72,
   cpuPercent: 15,
   ramPercent: 40,
+  totalRamGB: 16,
+  freeRamGB: 9.5,
   activeForegroundApp: 'Code.exe',
   activeProcessesCount: 45,
   harmfulFilesDetected: 0,
@@ -38,7 +40,7 @@ const sampleNodeWithPort445: FleetNode = {
 };
 
 assert.strictEqual(sampleNodeWithPort445.harmfulFilesDetected, 0, 'Open port 445 must NOT increment harmfulFilesDetected');
-assert.strictEqual(sampleNodeWithPort445.harmfulThreats.length, 0, 'Open port 445 must NOT create synthetic threat-port files');
+assert.strictEqual(sampleNodeWithPort445.harmfulThreats?.length ?? 0, 0, 'Open port 445 must NOT create synthetic threat-port files');
 assert.strictEqual(sampleNodeWithPort445.openPorts?.[0].port, 445);
 assert.strictEqual(sampleNodeWithPort445.openPorts?.[0].serviceName, 'SMB');
 console.log('✔ Test 1 Passed: Network Port 445 is strictly isolated from harmful filesystem files');
