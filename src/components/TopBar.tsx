@@ -14,9 +14,11 @@ import {
   Copy,
   Check,
   Server,
+  User,
 } from 'lucide-react';
 import { StatusCode } from '../types/security';
 import { api } from '../api/client';
+import { UserProfileModal } from './UserProfileModal';
 
 interface TopBarProps {
   currentTab: string;
@@ -42,6 +44,13 @@ export const TopBar: React.FC<TopBarProps> = ({
   unresolvedCount,
 }) => {
   const [copiedIp, setCopiedIp] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [userNameState, setUserNameState] = useState(
+    localStorage.getItem('pcb_user_name') || 'Administrator'
+  );
+  const [userRoleState, setUserRoleState] = useState(
+    localStorage.getItem('pcb_user_role') || 'ADMIN'
+  );
 
   const { data: networkData } = useQuery({
     queryKey: ['host_network'],
@@ -94,7 +103,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           }}
           className="text-base font-bold tracking-tight text-slate-900 hover:text-emerald-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded px-1"
         >
-          Personal Cybersecurity Bot
+          Shield Labs Bot
         </a>
 
         {/* Live Protection Status Indicator */}
@@ -217,6 +226,25 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span className="hidden sm:inline">Emergency</span> Panic
         </button>
 
+        {/* User Profile Avatar Badge */}
+        <button
+          type="button"
+          onClick={() => setIsProfileOpen(true)}
+          aria-label="User Profile"
+          title={`User Profile: ${userNameState} (${userRoleState})`}
+          className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 shadow-2xs"
+        >
+          <div className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-[10px]">
+            {(userNameState || 'A')[0].toUpperCase()}
+          </div>
+          <span className="hidden sm:inline font-semibold text-slate-800 max-w-[90px] truncate">
+            {userNameState}
+          </span>
+          <span className="text-[9px] uppercase px-1 rounded bg-slate-200 text-slate-700 font-bold">
+            {userRoleState === 'SECURITY_ANALYST' ? 'Analyst' : userRoleState}
+          </span>
+        </button>
+
         <button
           onClick={onOpenSettings}
           aria-label="Open Settings and Privacy"
@@ -235,6 +263,17 @@ export const TopBar: React.FC<TopBarProps> = ({
         </button>
       </div>
     </header>
+
+    {/* Dedicated User Profile Modal */}
+    <UserProfileModal
+      isOpen={isProfileOpen}
+      onClose={() => setIsProfileOpen(false)}
+      onSignOut={onLockConsole}
+      onProfileUpdated={(updated) => {
+        setUserNameState(updated.fullName);
+        setUserRoleState(updated.role);
+      }}
+    />
     {/* Secondary Navigation Row for viewports below lg */}
     <nav
       aria-label="Mobile Navigation"

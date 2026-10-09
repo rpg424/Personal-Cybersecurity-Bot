@@ -29,6 +29,9 @@ import {
   Check,
   Terminal,
   Link as LinkIcon,
+  Globe,
+  Ban,
+  ShieldX,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { FleetNode, FleetSummary, ClientTransparencyStatus } from '../types/security';
@@ -42,6 +45,8 @@ export const FleetManagerView: React.FC = () => {
   const [copiedPairingLink, setCopiedPairingLink] = useState(false);
   const [copiedScript, setCopiedScript] = useState(false);
   const [searchFilter, setSearchFilter] = useState('');
+  const [manualDomainInput, setManualDomainInput] = useState('');
+  const [manualFileInput, setManualFileInput] = useState('');
 
   // Agent script query for one-click pairing
   const { data: agentScriptData } = useQuery({
@@ -49,7 +54,20 @@ export const FleetManagerView: React.FC = () => {
     queryFn: api.getAgentScript,
   });
 
-  const pairingLink = typeof window !== 'undefined' ? `${window.location.origin}/join` : 'http://localhost:3000/join';
+  const { data: networkData } = useQuery({
+    queryKey: ['host_network'],
+    queryFn: api.getNetworkInterfaces,
+  });
+
+  const port = typeof window !== 'undefined' && window.location.port ? window.location.port : '3000';
+  const primaryIp = networkData?.primaryIp || '127.0.0.1';
+  const pairingLink = agentScriptData?.serverUrl
+    ? `${agentScriptData.serverUrl}/join`
+    : (networkData?.primaryIp && networkData.primaryIp !== '127.0.0.1'
+      ? `http://${networkData.primaryIp}:${port}/join`
+      : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+        ? `${window.location.origin}/join`
+        : `http://${primaryIp}:${port}/join`));
 
   const copyPairingLink = () => {
     navigator.clipboard.writeText(pairingLink);
@@ -61,6 +79,156 @@ export const FleetManagerView: React.FC = () => {
     navigator.clipboard.writeText(cmd);
     setCopiedScript(true);
     setTimeout(() => setCopiedScript(false), 2500);
+  };
+
+  // Remote threat remediation state and actions
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  const handleScanFiles = async (nodeId: string) => {
+    const actionKey = `scan-${nodeId}`;
+    setActionInProgress(actionKey);
+    try {
+      const res = await api.scanFleetFiles(nodeId);
+      setActionFeedback(res.message || `Scanned ${res.scannedFilesCount} items. ${res.threatsFound?.length || 0} threats found.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+      refetch();
+    } catch (err: any) {
+      alert(`Scan failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleBlockThreatFile = async (nodeId: string, threat: any) => {
+    const actionKey = `blockfile-${nodeId}-${threat.id || threat.fileName}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.blockFleetFile(nodeId, {
+        threatId: threat.id,
+        filePath: threat.filePath,
+        fileName: threat.fileName,
+        sha256: threat.sha256,
+      });
+      setActionFeedback(`File "${threat.fileName || 'file'}" blocked on remote laptop.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to block file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleManualBlockFile = async (nodeId: string) => {
+    if (!manualFileInput.trim()) return;
+    const actionKey = `blockfile-manual-${nodeId}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.blockFleetFile(nodeId, {
+        fileName: manualFileInput.trim(),
+        filePath: manualFileInput.trim(),
+      });
+      setManualFileInput('');
+      setActionFeedback(`File added to blacklist.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to block file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleBlockDomain = async (nodeId: string, domain: string) => {
+    if (!domain || !domain.trim()) return;
+    const actionKey = `blockdomain-${nodeId}-${domain}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.blockFleetDomain(nodeId, { domain: domain.trim() });
+      setActionFeedback(`Domain "${domain}" blocked on network firewall.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to block website: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleUnblockDomain = async (nodeId: string, domain: string) => {
+    const actionKey = `unblockdomain-${nodeId}-${domain}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.unblockFleetDomain(nodeId, { domain });
+      setActionFeedback(`Domain "${domain}" unblocked.`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to unblock website: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleQuarantineThreat = async (nodeId: string, threat: any) => {
+    const actionKey = `quarantine-${nodeId}-${threat.id}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.quarantineFleetThreat(nodeId, {
+        threatId: threat.id,
+        filePath: threat.filePath,
+        fileName: threat.fileName,
+      });
+      setActionFeedback(`Quarantine order queued for ${threat.fileName || 'file'}`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to queue quarantine: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleDeleteThreatFile = async (nodeId: string, threat: any) => {
+    if (!confirm(`Are you sure you want to permanently delete "${threat.fileName || threat.filePath}" from remote node?`)) {
+      return;
+    }
+    const actionKey = `delete-${nodeId}-${threat.id}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.deleteFleetThreatFile(nodeId, {
+        threatId: threat.id,
+        filePath: threat.filePath,
+        fileName: threat.fileName,
+      });
+      setActionFeedback(`File deletion command dispatched for ${threat.fileName || 'file'}`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to delete file: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const handleKillThreatProcess = async (nodeId: string, threat: any) => {
+    const actionKey = `kill-${nodeId}-${threat.id}`;
+    setActionInProgress(actionKey);
+    try {
+      await api.killFleetProcess(nodeId, {
+        threatId: threat.id,
+        pid: threat.pid,
+        processName: threat.processName,
+      });
+      setActionFeedback(`Process termination order queued for PID ${threat.pid || threat.processName}`);
+      setTimeout(() => setActionFeedback(null), 3500);
+      refetch();
+    } catch (err: any) {
+      alert(`Failed to kill process: ${err.message || 'Unknown error'}`);
+    } finally {
+      setActionInProgress(null);
+    }
   };
 
   // Enrollment Form State
@@ -247,6 +415,22 @@ export const FleetManagerView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {actionFeedback && (
+        <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl text-xs font-semibold text-emerald-900 flex items-center justify-between shadow-2xs">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{actionFeedback}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="text-emerald-700 hover:text-emerald-950 font-bold text-[11px]"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Fleet Summary KPI Widgets */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
@@ -467,6 +651,58 @@ export const FleetManagerView: React.FC = () => {
                     </span>
                   </div>
 
+                  {/* Active Browser & Website Safety Monitoring */}
+                  {(node.activeBrowserDomain || node.activeBrowserUrl || ['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe'].includes(node.activeForegroundApp?.toLowerCase() || '')) && (
+                    <div className="p-2 rounded bg-white border border-slate-200 text-xs space-y-1 shadow-2xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-500 flex items-center gap-1">
+                          <Globe className="w-3.5 h-3.5 text-blue-600 shrink-0" /> Visited Site:
+                        </span>
+                        <span className="font-mono font-bold text-slate-800 truncate max-w-[170px]" title={node.activeBrowserDomain || node.activeBrowserUrl}>
+                          {node.activeBrowserDomain || node.activeBrowserUrl || 'Active Browser Tab'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span
+                          className={`px-1.5 py-0.2 text-[9px] font-bold uppercase rounded border ${
+                            node.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (node.activeBrowserDomain && node.blockedDomains?.includes(node.activeBrowserDomain))
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : node.activeBrowserVerdict === 'SUSPICIOUS'
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {node.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (node.activeBrowserDomain && node.blockedDomains?.includes(node.activeBrowserDomain))
+                            ? '🛑 Blocked Site'
+                            : node.activeBrowserVerdict === 'SUSPICIOUS'
+                            ? '⚠️ Suspicious Site'
+                            : '🛡️ Safe Site'}
+                        </span>
+                        {node.activeBrowserDomain && (
+                          <button
+                            type="button"
+                            disabled={Boolean(actionInProgress)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (node.blockedDomains?.includes(node.activeBrowserDomain!)) {
+                                handleUnblockDomain(node.id, node.activeBrowserDomain!);
+                              } else {
+                                handleBlockDomain(node.id, node.activeBrowserDomain!);
+                              }
+                            }}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded border transition-colors shadow-2xs disabled:opacity-50 ${
+                              node.blockedDomains?.includes(node.activeBrowserDomain)
+                                ? 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700'
+                                : 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100'
+                            }`}
+                          >
+                            {node.blockedDomains?.includes(node.activeBrowserDomain) ? 'Unblock Site' : 'Block Site'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500">Harmful Files / Malware:</span>
                     <span
@@ -502,8 +738,10 @@ export const FleetManagerView: React.FC = () => {
                               <span className="font-bold text-slate-900 truncate" title={threat.title}>
                                 {threat.fileName || threat.title}
                               </span>
-                              <span className="px-1 py-0.2 text-[9px] font-bold uppercase rounded bg-rose-100 text-rose-800 shrink-0">
-                                {threat.severity}
+                              <span className={`px-1 py-0.2 text-[9px] font-bold uppercase rounded ${
+                                threat.status === 'blocked' ? 'bg-rose-600 text-white' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {threat.status === 'blocked' ? 'BLOCKED' : threat.severity}
                               </span>
                             </div>
                             <div className="text-[10px] font-mono text-slate-700 break-all bg-slate-50 p-1 rounded border border-slate-200" title={threat.filePath}>
@@ -516,6 +754,62 @@ export const FleetManagerView: React.FC = () => {
                             )}
                             <div className="text-[10px] text-rose-900 font-medium">
                               ⚠️ {threat.whyRisky}
+                            </div>
+                            <div className="pt-1.5 flex flex-wrap items-center gap-1.5 border-t border-slate-100">
+                              <button
+                                type="button"
+                                disabled={Boolean(actionInProgress) || threat.status === 'blocked'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleBlockThreatFile(node.id, threat);
+                                }}
+                                className={`px-2 py-0.5 text-[10px] font-semibold border rounded transition-colors ${
+                                  threat.status === 'blocked'
+                                    ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold'
+                                    : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300'
+                                }`}
+                                title="Block and blacklist harmful file"
+                              >
+                                {threat.status === 'blocked' ? '🛑 Blocked' : 'Block File'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={Boolean(actionInProgress)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleQuarantineThreat(node.id, threat);
+                                }}
+                                className="px-2 py-0.5 text-[10px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded transition-colors disabled:opacity-50"
+                                title="Quarantine file to isolated encrypted directory"
+                              >
+                                {actionInProgress === `quarantine-${node.id}-${threat.id}` ? 'Queuing…' : 'Quarantine Remotely'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={Boolean(actionInProgress)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteThreatFile(node.id, threat);
+                                }}
+                                className="px-2 py-0.5 text-[10px] font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded transition-colors disabled:opacity-50"
+                                title="Permanently delete harmful file"
+                              >
+                                {actionInProgress === `delete-${node.id}-${threat.id}` ? 'Deleting…' : 'Delete File'}
+                              </button>
+                              {threat.pid ? (
+                                <button
+                                  type="button"
+                                  disabled={Boolean(actionInProgress)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleKillThreatProcess(node.id, threat);
+                                  }}
+                                  className="px-2 py-0.5 text-[10px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded transition-colors disabled:opacity-50"
+                                  title="Kill running process"
+                                >
+                                  {actionInProgress === `kill-${node.id}-${threat.id}` ? 'Stopping…' : 'Kill Process'}
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         ))}
@@ -591,12 +885,12 @@ export const FleetManagerView: React.FC = () => {
 
                 <div className="flex items-center gap-1.5">
                   <button
-                    onClick={() => scanMutation.mutate(node.id)}
-                    disabled={isScanningThisNode}
+                    onClick={() => handleScanFiles(node.id)}
+                    disabled={actionInProgress === `scan-${node.id}`}
                     className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors disabled:opacity-50"
                   >
-                    <RefreshCw className={`w-3 h-3 ${isScanningThisNode ? 'animate-spin' : ''}`} />
-                    {isScanningThisNode ? 'Scanning...' : 'Scan Now'}
+                    <RefreshCw className={`w-3 h-3 ${actionInProgress === `scan-${node.id}` ? 'animate-spin' : ''}`} />
+                    {actionInProgress === `scan-${node.id}` ? 'Scanning...' : 'Scan Now'}
                   </button>
 
                   {!node.isLocal && (
@@ -620,372 +914,635 @@ export const FleetManagerView: React.FC = () => {
       </div>
 
       {/* Node Details Inspection Modal */}
-      {selectedNode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <Laptop className="w-5 h-5 text-emerald-600" />
-                  {selectedNode.hostname} Telemetry & Posture
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Assigned User: <strong className="text-slate-800">{selectedNode.assignedUser}</strong> · IP: {selectedNode.ipAddress}
-                </p>
+      {selectedNode && (() => {
+        const activeModalNode = fleetData?.nodes?.find((n) => n.id === selectedNode.id) || selectedNode;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
+            <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                    <Laptop className="w-5 h-5 text-emerald-600" />
+                    {activeModalNode.hostname} Telemetry & Posture
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Assigned User: <strong className="text-slate-800">{activeModalNode.assignedUser}</strong> · IP: {activeModalNode.ipAddress}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <button
-                onClick={() => setSelectedNode(null)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-md"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* Operating System and Specs */}
-            <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
-              <div>
-                <span className="text-slate-500">Operating System:</span>
-                <div className="font-semibold text-slate-900 mt-0.5">{selectedNode.os}</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Safety Verdict:</span>
-                <div className="font-semibold text-slate-900 mt-0.5 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  {selectedNode.safetyVerdict} ({selectedNode.safetyScore}/100)
+              {/* Operating System and Specs */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200">
+                <div>
+                  <span className="text-slate-500">Operating System:</span>
+                  <div className="font-semibold text-slate-900 mt-0.5">{activeModalNode.os}</div>
+                </div>
+                <div>
+                  <span className="text-slate-500">Safety Verdict:</span>
+                  <div className="font-semibold text-slate-900 mt-0.5 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    {activeModalNode.safetyVerdict} ({activeModalNode.safetyScore}/100)
+                  </div>
+                </div>
+                <div>
+                  <span className="text-slate-500">Monitoring Policy:</span>
+                  <div className="font-semibold text-slate-900 mt-0.5">Continuous Protection (No time limit)</div>
+                </div>
+                <div>
+                  <span className="text-slate-500">Last Telemetry Heartbeat:</span>
+                  <div className="font-mono text-slate-700 mt-0.5">
+                    {new Date(activeModalNode.lastHeartbeatUtc).toLocaleTimeString()}
+                  </div>
                 </div>
               </div>
-              <div>
-                <span className="text-slate-500">Monitoring Policy:</span>
-                <div className="font-semibold text-slate-900 mt-0.5">Continuous Protection (No time limit)</div>
-              </div>
-              <div>
-                <span className="text-slate-500">Last Telemetry Heartbeat:</span>
-                <div className="font-mono text-slate-700 mt-0.5">
-                  {new Date(selectedNode.lastHeartbeatUtc).toLocaleTimeString()}
-                </div>
-              </div>
-            </div>
 
-            {/* Full Hardware Inventory & Live Specs */}
-            <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-3.5 shadow-2xs">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4 text-emerald-600" />
-                  Full Physical Hardware & Memory Inventory
-                </h4>
-                {selectedNode.isAgentless ? (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
-                    External IP Probed (Agentless)
-                  </span>
-                ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
-                    Kernel Telemetry Active
-                  </span>
+              {/* Full Hardware Inventory & Live Specs */}
+              <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-3.5 shadow-2xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Cpu className="w-4 h-4 text-emerald-600" />
+                    Full Physical Hardware & Memory Inventory
+                  </h4>
+                  {activeModalNode.isAgentless ? (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                      External IP Probed (Agentless)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                      Kernel Telemetry Active
+                    </span>
+                  )}
+                </div>
+
+                {/* CPU Hardware Specs */}
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <div className="font-bold text-slate-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-slate-600" />
+                      Central Processing Unit (CPU)
+                    </span>
+                    <span className="font-mono text-emerald-700 font-bold">
+                      {activeModalNode.cpuPercent > 0 ? `${activeModalNode.cpuPercent}% Live Load` : 'Agentless'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                    <div>
+                      <span className="text-slate-500">Processor Model:</span>
+                      <div className="font-mono font-semibold text-slate-900 truncate" title={activeModalNode.cpuModel}>
+                        {activeModalNode.cpuModel || (activeModalNode.isLocal ? 'Host Physical Processor' : 'Generic x64 Processor')}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Cores / Threads:</span>
+                      <div className="font-semibold text-slate-900">
+                        {activeModalNode.cpuCores ? `${activeModalNode.cpuCores} Physical/Logical Cores` : 'Multi-Core'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Base Clock Speed:</span>
+                      <div className="font-semibold text-slate-900">
+                        {activeModalNode.cpuSpeedMHz ? `${activeModalNode.cpuSpeedMHz} MHz` : 'Dynamic Clock'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RAM Hardware Specs */}
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
+                  <div className="font-bold text-slate-900 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-slate-600" />
+                      Physical Random Access Memory (RAM)
+                    </span>
+                    <span className="font-mono text-slate-700 font-bold">
+                      {activeModalNode.totalRamGB > 0 ? `${activeModalNode.ramPercent}% In Use` : 'Agentless'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
+                    <div>
+                      <span className="text-slate-500">Total Installed RAM:</span>
+                      <div className="font-bold text-slate-900">
+                        {activeModalNode.totalRamGB > 0 ? `${activeModalNode.totalRamGB} GB Physical RAM` : 'Agentless (Probing)'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">RAM In Use:</span>
+                      <div className="font-bold text-slate-900">
+                        {activeModalNode.totalRamGB > 0
+                          ? `${((activeModalNode.totalRamGB * activeModalNode.ramPercent) / 100).toFixed(1)} GB (${activeModalNode.ramPercent}%)`
+                          : '—'}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Free Available RAM:</span>
+                      <div className="font-bold text-emerald-700">
+                        {activeModalNode.freeRamGB > 0 ? `${activeModalNode.freeRamGB} GB Free` : '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Storage Drives Inventory */}
+                {activeModalNode.storageDrives && activeModalNode.storageDrives.length > 0 && (
+                  <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
+                    <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Folder className="w-3.5 h-3.5 text-slate-600" />
+                      Storage Disks & Partitions ({activeModalNode.storageDrives.length})
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {activeModalNode.storageDrives.map((d, i) => (
+                        <div key={i} className="bg-white p-2 rounded border border-slate-200 text-[11px] space-y-1">
+                          <div className="flex items-center justify-between font-bold text-slate-800">
+                            <span>Drive {d.drive}</span>
+                            <span className="text-slate-500">{d.usedPct}% Used</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${d.usedPct > 90 ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                              style={{ width: `${d.usedPct}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[10px] text-slate-500">
+                            <span>Total: {d.totalGB} GB</span>
+                            <span className="text-emerald-700 font-medium">Free: {d.freeGB} GB</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Agentless Device Pairing Notice */}
+                {activeModalNode.isAgentless && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-2">
+                    <div className="font-bold text-amber-950 flex items-center gap-1.5">
+                      <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                      Why are CPU chip model and files not loaded yet?
+                    </div>
+                    <p className="text-amber-900 text-[11px] leading-relaxed">
+                      External IP network probing tests open ports (e.g. Port 1 TCPMUX) and latency, but standard network firewalls block reading physical CPU chips, RAM slots, or private files across the network without user authorization on the laptop.
+                    </p>
+                    <div className="flex items-center gap-2 pt-1 flex-wrap">
+                      <button
+                        onClick={copyPairingLink}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-amber-300 rounded text-amber-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
+                      >
+                        <Copy className="w-3 h-3" /> Copy Web Pairing Link (/join)
+                      </button>
+                      <button
+                        onClick={() => setIsScriptModalOpen(true)}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
+                      >
+                        <Terminal className="w-3 h-3" /> View PowerShell Script
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
-              {/* CPU Hardware Specs */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
-                <div className="font-bold text-slate-900 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-slate-600" />
-                    Central Processing Unit (CPU)
-                  </span>
-                  <span className="font-mono text-emerald-700 font-bold">
-                    {selectedNode.cpuPercent > 0 ? `${selectedNode.cpuPercent}% Live Load` : 'Agentless'}
+              {/* Active Foreground Application & Visited Website Safety Monitor */}
+              <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-blue-600" />
+                    Active Browser & Visited Website Safety Monitor
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    App: {activeModalNode.activeForegroundApp} · {activeModalNode.activeProcessesCount} processes
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-                  <div>
-                    <span className="text-slate-500">Processor Model:</span>
-                    <div className="font-mono font-semibold text-slate-900 truncate" title={selectedNode.cpuModel}>
-                      {selectedNode.cpuModel || (selectedNode.isLocal ? 'Host Physical Processor' : 'Generic x64 Processor')}
+
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2.5 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Currently Visited Domain:</span>
+                    <span className="font-mono font-bold text-slate-900 text-sm">
+                      {activeModalNode.activeBrowserDomain || 'google.com'}
+                    </span>
+                  </div>
+
+                  {activeModalNode.activeBrowserUrl && (
+                    <div className="text-[11px] font-mono text-slate-600 truncate bg-white p-1.5 rounded border border-slate-200">
+                      <strong>Target URL:</strong> {activeModalNode.activeBrowserUrl}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                    <div>
+                      <span className="text-slate-500 text-[11px]">Safety Posture Verdict:</span>
+                      <div className="mt-0.5">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded font-bold text-[11px] border ${
+                            activeModalNode.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (activeModalNode.activeBrowserDomain && activeModalNode.blockedDomains?.includes(activeModalNode.activeBrowserDomain))
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : activeModalNode.activeBrowserVerdict === 'SUSPICIOUS'
+                              ? 'bg-amber-100 text-amber-800 border-amber-300'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}
+                        >
+                          {activeModalNode.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (activeModalNode.activeBrowserDomain && activeModalNode.blockedDomains?.includes(activeModalNode.activeBrowserDomain))
+                            ? '🛑 Harmful / Blocked Site'
+                            : activeModalNode.activeBrowserVerdict === 'SUSPICIOUS'
+                            ? '⚠️ Suspicious Domain'
+                            : '🛡️ Safe & Verified'}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[11px]">Threat Category:</span>
+                      <div className="font-semibold text-slate-900 mt-0.5">
+                        {activeModalNode.activeBrowserCategory || 'Legitimate / Verified Domain'}
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Cores / Threads:</span>
-                    <div className="font-semibold text-slate-900">
-                      {selectedNode.cpuCores ? `${selectedNode.cpuCores} Physical/Logical Cores` : 'Multi-Core'}
+
+                  {/* Threat Risk Score progress bar */}
+                  <div className="space-y-1 pt-1">
+                    <div className="flex justify-between text-[11px] font-bold">
+                      <span className="text-slate-600">Site Threat Risk Score:</span>
+                      <span className={activeModalNode.activeBrowserRiskScore && activeModalNode.activeBrowserRiskScore > 50 ? 'text-rose-600' : 'text-emerald-700'}>
+                        {activeModalNode.activeBrowserRiskScore || 5}/100
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          activeModalNode.activeBrowserRiskScore && activeModalNode.activeBrowserRiskScore > 70
+                            ? 'bg-rose-500'
+                            : activeModalNode.activeBrowserRiskScore && activeModalNode.activeBrowserRiskScore > 40
+                            ? 'bg-amber-500'
+                            : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.max(5, activeModalNode.activeBrowserRiskScore || 5)}%` }}
+                      />
                     </div>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Base Clock Speed:</span>
-                    <div className="font-semibold text-slate-900">
-                      {selectedNode.cpuSpeedMHz ? `${selectedNode.cpuSpeedMHz} MHz` : 'Dynamic Clock'}
-                    </div>
+
+                  <div className="pt-2 flex items-center justify-between border-t border-slate-200">
+                    <span className="text-[11px] text-slate-500">
+                      Remote Network Firewall Action:
+                    </span>
+                    {activeModalNode.activeBrowserDomain && (
+                      <button
+                        type="button"
+                        disabled={Boolean(actionInProgress)}
+                        onClick={() => {
+                          if (activeModalNode.blockedDomains?.includes(activeModalNode.activeBrowserDomain!)) {
+                            handleUnblockDomain(activeModalNode.id, activeModalNode.activeBrowserDomain!);
+                          } else {
+                            handleBlockDomain(activeModalNode.id, activeModalNode.activeBrowserDomain!);
+                          }
+                        }}
+                        className={`px-3 py-1 text-xs font-bold rounded-lg border transition-colors shadow-2xs disabled:opacity-50 ${
+                          activeModalNode.blockedDomains?.includes(activeModalNode.activeBrowserDomain)
+                            ? 'bg-rose-600 text-white border-rose-700 hover:bg-rose-700'
+                            : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                        }`}
+                      >
+                        {activeModalNode.blockedDomains?.includes(activeModalNode.activeBrowserDomain)
+                          ? 'Unblock Website'
+                          : '🛑 Block This Website'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* RAM Hardware Specs */}
-              <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
-                <div className="font-bold text-slate-900 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <HardDrive className="w-3.5 h-3.5 text-slate-600" />
-                    Physical Random Access Memory (RAM)
-                  </span>
-                  <span className="font-mono text-slate-700 font-bold">
-                    {selectedNode.totalRamGB > 0 ? `${selectedNode.ramPercent}% In Use` : 'Agentless'}
+              {/* Blocked Websites & Network Domain Firewall Rules Panel */}
+              <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-3 shadow-2xs">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Ban className="w-4 h-4 text-rose-600" />
+                    Blocked Websites & Firewall Domain Rules ({activeModalNode.blockedDomains?.length || 0})
+                  </h4>
+                  <span className="text-[10px] text-slate-500">
+                    Host & Firewall Domain Blacklist
                   </span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-slate-700">
-                  <div>
-                    <span className="text-slate-500">Total Installed RAM:</span>
-                    <div className="font-bold text-slate-900">
-                      {selectedNode.totalRamGB > 0 ? `${selectedNode.totalRamGB} GB Physical RAM` : 'Agentless (Probing)'}
+
+                <div className="space-y-2">
+                  {activeModalNode.blockedDomains && activeModalNode.blockedDomains.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {activeModalNode.blockedDomains.map((dom) => (
+                        <div
+                          key={dom}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 rounded-lg text-xs font-mono font-semibold"
+                        >
+                          <Ban className="w-3 h-3 text-rose-600" />
+                          <span>{dom}</span>
+                          <button
+                            type="button"
+                            disabled={Boolean(actionInProgress)}
+                            onClick={() => handleUnblockDomain(activeModalNode.id, dom)}
+                            className="ml-1 text-rose-500 hover:text-rose-700 font-bold text-sm"
+                            title="Unblock domain"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">RAM In Use:</span>
-                    <div className="font-bold text-slate-900">
-                      {selectedNode.totalRamGB > 0
-                        ? `${((selectedNode.totalRamGB * selectedNode.ramPercent) / 100).toFixed(1)} GB (${selectedNode.ramPercent}%)`
-                        : '—'}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500">Free Available RAM:</span>
-                    <div className="font-bold text-emerald-700">
-                      {selectedNode.freeRamGB > 0 ? `${selectedNode.freeRamGB} GB Free` : '—'}
-                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 italic">No websites blocked on this device yet.</p>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={manualDomainInput}
+                      onChange={(e) => setManualDomainInput(e.target.value)}
+                      placeholder="Enter domain to block (e.g. phishing-gateway.cc)"
+                      className="flex-1 text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-rose-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={!manualDomainInput.trim() || Boolean(actionInProgress)}
+                      onClick={() => {
+                        handleBlockDomain(activeModalNode.id, manualDomainInput.trim());
+                        setManualDomainInput('');
+                      }}
+                      className="px-3 py-1.5 text-xs font-semibold bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
+                    >
+                      Block Domain
+                    </button>
                   </div>
                 </div>
               </div>
 
-              {/* Storage Drives Inventory */}
-              {selectedNode.storageDrives && selectedNode.storageDrives.length > 0 && (
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2 text-xs">
-                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
-                    <Folder className="w-3.5 h-3.5 text-slate-600" />
-                    Storage Disks & Partitions ({selectedNode.storageDrives.length})
+              {/* Exact Harmful Files & Detected Threats Section */}
+              {activeModalNode.harmfulThreats && activeModalNode.harmfulThreats.length > 0 ? (
+                <div className="border border-rose-200 bg-rose-50/50 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wider flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      Exact Detected Threats & Harmful Files ({activeModalNode.harmfulThreats.length})
+                    </h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-200 text-rose-900 border border-rose-300">
+                      Active Harmful Threat
+                    </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {selectedNode.storageDrives.map((d, i) => (
-                      <div key={i} className="bg-white p-2 rounded border border-slate-200 text-[11px] space-y-1">
-                        <div className="flex items-center justify-between font-bold text-slate-800">
-                          <span>Drive {d.drive}</span>
-                          <span className="text-slate-500">{d.usedPct}% Used</span>
+                  <div className="space-y-2.5">
+                    {activeModalNode.harmfulThreats.map((threat) => (
+                      <div
+                        key={threat.id}
+                        className="bg-white border border-rose-200 rounded-lg p-3.5 space-y-2 text-xs shadow-2xs"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                              <FileWarning className="w-4 h-4 text-rose-600 shrink-0" />
+                              {threat.fileName}
+                            </div>
+                            <div className="text-xs text-rose-800 font-semibold mt-0.5">
+                              {threat.title} · <span className="font-mono text-[11px] text-slate-600">{threat.threatType}</span>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded-full ${
+                            threat.status === 'blocked'
+                              ? 'bg-rose-600 text-white'
+                              : 'bg-rose-100 text-rose-800 border border-rose-200'
+                          }`}>
+                            {threat.status === 'blocked' ? 'BLOCKED' : threat.severity}
+                          </span>
                         </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${d.usedPct > 90 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                            style={{ width: `${d.usedPct}%` }}
-                          />
+
+                        <div className="bg-slate-50 border border-slate-200 rounded p-2 font-mono text-[11px] text-slate-800 break-all">
+                          <strong className="text-slate-900">Exact File Path:</strong> {threat.filePath}
                         </div>
-                        <div className="flex justify-between text-[10px] text-slate-500">
-                          <span>Total: {d.totalGB} GB</span>
-                          <span className="text-emerald-700 font-medium">Free: {d.freeGB} GB</span>
+
+                        {threat.processName && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2 rounded border border-slate-200">
+                            <div>
+                              <span className="text-slate-500">Offending Process:</span>
+                              <div className="font-bold text-slate-900 font-mono">{threat.processName}</div>
+                            </div>
+                            <div>
+                              <span className="text-slate-500">Process ID (PID):</span>
+                              <div className="font-bold text-slate-900 font-mono">{threat.pid || 'In-Memory volatile'}</div>
+                            </div>
+                          </div>
+                        )}
+
+                        {threat.commandLine && (
+                          <div className="text-[10px] font-mono text-slate-600 break-all bg-slate-100/70 p-1.5 rounded">
+                            <strong>Command Line:</strong> {threat.commandLine}
+                          </div>
+                        )}
+
+                        {threat.sha256 && (
+                          <div className="text-[10px] text-slate-500 font-mono break-all">
+                            SHA-256 Hash: {threat.sha256}
+                          </div>
+                        )}
+
+                        <div className="text-xs text-rose-950 bg-rose-50/80 p-2 rounded border border-rose-100">
+                          <strong>Why It's Harmful / Risky:</strong> {threat.whyRisky}
                         </div>
+
+                        <div className="text-xs text-emerald-950 bg-emerald-50/80 p-2 rounded border border-emerald-100">
+                          <strong>Recommended Defensive Action:</strong> {threat.recommendation}
+                        </div>
+
+                        <div className="pt-2 flex flex-wrap items-center gap-2 border-t border-slate-200">
+                          <button
+                            type="button"
+                            disabled={Boolean(actionInProgress) || threat.status === 'blocked'}
+                            onClick={() => handleBlockThreatFile(activeModalNode.id, threat)}
+                            className={`px-3 py-1.5 text-xs font-semibold border rounded-md transition-colors shadow-2xs ${
+                              threat.status === 'blocked'
+                                ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold'
+                                : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-300'
+                            }`}
+                          >
+                            {threat.status === 'blocked' ? '🛑 Blocked on Laptop' : '🛑 Block & Blacklist File'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={Boolean(actionInProgress)}
+                            onClick={() => handleQuarantineThreat(activeModalNode.id, threat)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-md transition-colors shadow-2xs disabled:opacity-50"
+                          >
+                            {actionInProgress === `quarantine-${activeModalNode.id}-${threat.id}` ? 'Queuing…' : 'Quarantine Remotely'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={Boolean(actionInProgress)}
+                            onClick={() => handleDeleteThreatFile(activeModalNode.id, threat)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-md transition-colors shadow-2xs disabled:opacity-50"
+                          >
+                            {actionInProgress === `delete-${activeModalNode.id}-${threat.id}` ? 'Deleting…' : 'Delete File'}
+                          </button>
+                          {threat.pid ? (
+                            <button
+                              type="button"
+                              disabled={Boolean(actionInProgress)}
+                              onClick={() => handleKillThreatProcess(activeModalNode.id, threat)}
+                              className="px-3 py-1.5 text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 rounded-md transition-colors shadow-2xs disabled:opacity-50"
+                            >
+                              {actionInProgress === `kill-${activeModalNode.id}-${threat.id}` ? 'Stopping…' : 'Kill Process'}
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-900 font-medium">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                    <span>No harmful files, trojans, or malware detected on this system.</span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-800 uppercase px-2 py-0.5 rounded bg-emerald-100 border border-emerald-200">
+                    Clean & Protected
+                  </span>
+                </div>
+              )}
+
+              {/* Blocked Files Blacklist Inventory */}
+              {activeModalNode.blockedFiles && activeModalNode.blockedFiles.length > 0 && (
+                <div className="border border-slate-200 bg-white rounded-xl p-4 space-y-2 text-xs shadow-2xs">
+                  <div className="font-bold text-slate-800 flex items-center justify-between pb-1 border-b border-slate-100">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldX className="w-4 h-4 text-rose-600" />
+                      Blocked & Blacklisted Files ({activeModalNode.blockedFiles.length})
+                    </span>
+                    <span className="text-[10px] text-slate-500">Restricted from execution</span>
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    {activeModalNode.blockedFiles.map((bf) => (
+                      <div key={bf} className="p-1.5 bg-rose-50/50 border border-rose-200 rounded font-mono text-[11px] text-rose-900 break-all flex items-center gap-2">
+                        <FileWarning className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        <span>{bf}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Agentless Device Pairing Notice */}
-              {selectedNode.isAgentless && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs space-y-2">
-                  <div className="font-bold text-amber-950 flex items-center gap-1.5">
-                    <Info className="w-4 h-4 text-amber-600 shrink-0" />
-                    Why are CPU chip model and files not loaded yet?
-                  </div>
-                  <p className="text-amber-900 text-[11px] leading-relaxed">
-                    External IP network probing tests open ports (e.g. Port 1 TCPMUX) and latency, but standard network firewalls block reading physical CPU chips, RAM slots, or private files across the network without user authorization on the laptop.
-                  </p>
-                  <div className="flex items-center gap-2 pt-1 flex-wrap">
-                    <button
-                      onClick={copyPairingLink}
-                      className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-amber-300 rounded text-amber-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
-                    >
-                      <Copy className="w-3 h-3" /> Copy Web Pairing Link (/join)
-                    </button>
-                    <button
-                      onClick={() => setIsScriptModalOpen(true)}
-                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
-                    >
-                      <Terminal className="w-3 h-3" /> View PowerShell Script
-                    </button>
-                  </div>
+              {/* Manual File Blacklist Entry */}
+              <div className="border border-slate-200 bg-white rounded-xl p-3.5 space-y-2 text-xs shadow-2xs">
+                <div className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-slate-600" />
+                  Manual File Blacklist & Block Rule
                 </div>
-              )}
-            </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={manualFileInput}
+                    onChange={(e) => setManualFileInput(e.target.value)}
+                    placeholder="Enter file path, binary name, or hash to block on laptop"
+                    className="flex-1 text-xs px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-1 focus:ring-rose-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={!manualFileInput.trim() || Boolean(actionInProgress)}
+                    onClick={() => handleManualBlockFile(activeModalNode.id)}
+                    className="px-3 py-1.5 text-xs font-semibold bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors disabled:opacity-50"
+                  >
+                    Block File
+                  </button>
+                </div>
+              </div>
 
-            {/* Exact Harmful Files & Detected Threats Section */}
-            {selectedNode.harmfulThreats && selectedNode.harmfulThreats.length > 0 ? (
-              <div className="border border-rose-200 bg-rose-50/50 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold text-rose-950 uppercase tracking-wider flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-rose-600" />
-                    Exact Detected Threats & Harmful Files ({selectedNode.harmfulThreats.length})
+              {/* Listening Ports / Services */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    Verified Listening Ports & Services ({activeModalNode.openPorts?.length || 0})
                   </h4>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-200 text-rose-900 border border-rose-300">
-                    Active Harmful Threat
+                  <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    Virtual Network Sockets (TCP/IP) · Not Physical USB Slots
                   </span>
                 </div>
-                <div className="space-y-2.5">
-                  {selectedNode.harmfulThreats.map((threat) => (
-                    <div
-                      key={threat.id}
-                      className="bg-white border border-rose-200 rounded-lg p-3.5 space-y-2 text-xs shadow-2xs"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                            <FileWarning className="w-4 h-4 text-rose-600 shrink-0" />
-                            {threat.fileName}
-                          </div>
-                          <div className="text-xs text-rose-800 font-semibold mt-0.5">
-                            {threat.title} · <span className="font-mono text-[11px] text-slate-600">{threat.threatType}</span>
-                          </div>
+                <div className="space-y-1.5">
+                  {activeModalNode.openPorts && activeModalNode.openPorts.length > 0 ? (
+                    activeModalNode.openPorts.map((p) => (
+                      <div
+                        key={p.port}
+                        className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs gap-3"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-mono font-bold text-slate-900 shrink-0">Port {p.port}</span>
+                          <span className="font-semibold text-slate-800 truncate">
+                            {p.serviceName}
+                          </span>
+                          <span
+                            className={`px-1.5 py-0.2 text-[9px] font-bold uppercase rounded shrink-0 ${
+                              p.risk === 'HIGH'
+                                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                : p.risk === 'MEDIUM'
+                                ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            }`}
+                          >
+                            {p.risk} Risk
+                          </span>
                         </div>
-                        <span className="px-2 py-0.5 text-[10px] font-bold uppercase rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-                          {threat.severity}
+                        <span className="text-[11px] text-slate-500 text-right shrink-0 max-w-xs truncate" title={p.description}>
+                          {p.description}
                         </span>
                       </div>
-
-                      <div className="bg-slate-50 border border-slate-200 rounded p-2 font-mono text-[11px] text-slate-800 break-all">
-                        <strong className="text-slate-900">Exact File Path:</strong> {threat.filePath}
-                      </div>
-
-                      {threat.processName && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2 rounded border border-slate-200">
-                          <div>
-                            <span className="text-slate-500">Offending Process:</span>
-                            <div className="font-bold text-slate-900 font-mono">{threat.processName}</div>
-                          </div>
-                          <div>
-                            <span className="text-slate-500">Process ID (PID):</span>
-                            <div className="font-bold text-slate-900 font-mono">{threat.pid || 'In-Memory volatile'}</div>
-                          </div>
-                        </div>
-                      )}
-
-                      {threat.commandLine && (
-                        <div className="text-[10px] font-mono text-slate-600 break-all bg-slate-100/70 p-1.5 rounded">
-                          <strong>Command Line:</strong> {threat.commandLine}
-                        </div>
-                      )}
-
-                      {threat.sha256 && (
-                        <div className="text-[10px] text-slate-500 font-mono break-all">
-                          SHA-256 Hash: {threat.sha256}
-                        </div>
-                      )}
-
-                      <div className="text-xs text-rose-950 bg-rose-50/80 p-2 rounded border border-rose-100">
-                        <strong>Why It's Harmful / Risky:</strong> {threat.whyRisky}
-                      </div>
-
-                      <div className="text-xs text-emerald-950 bg-emerald-50/80 p-2 rounded border border-emerald-100">
-                        <strong>Recommended Defensive Action:</strong> {threat.recommendation}
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-500 italic p-2 bg-slate-50 rounded">
+                      No exposed public ports found. System is in stealth mode.
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
-            ) : (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs flex items-center justify-between">
-                <div className="flex items-center gap-2 text-emerald-900 font-medium">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>No harmful files, trojans, or malware detected on this system.</span>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-800 uppercase px-2 py-0.5 rounded bg-emerald-100 border border-emerald-200">
-                  Clean & Protected
-                </span>
-              </div>
-            )}
 
-            {/* Listening Ports / Services */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Verified Listening Ports & Services ({selectedNode.openPorts?.length || 0})
+              {/* Recent Node Activity Log */}
+              <div>
+                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  Recent Security & Telemetry Events
                 </h4>
-                <span className="text-[10px] text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                  Virtual Network Sockets (TCP/IP) · Not Physical USB Slots
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {selectedNode.openPorts && selectedNode.openPorts.length > 0 ? (
-                  selectedNode.openPorts.map((p) => (
-                    <div
-                      key={p.port}
-                      className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200 rounded text-xs gap-3"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-mono font-bold text-slate-900 shrink-0">Port {p.port}</span>
-                        <span className="font-semibold text-slate-800 truncate">
-                          {p.serviceName}
-                        </span>
-                        <span
-                          className={`px-1.5 py-0.2 text-[9px] font-bold uppercase rounded shrink-0 ${
-                            p.risk === 'HIGH'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : p.risk === 'MEDIUM'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          }`}
-                        >
-                          {p.risk} Risk
+                <div className="space-y-1.5 text-xs">
+                  {activeModalNode.recentActivity && activeModalNode.recentActivity.length > 0 ? (
+                    activeModalNode.recentActivity.map((act, idx) => (
+                      <div
+                        key={idx}
+                        className="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between gap-2"
+                      >
+                        <span className="text-slate-800">{act.event}</span>
+                        <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                          {new Date(act.timestampUtc).toLocaleTimeString()}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-500 text-right shrink-0 max-w-xs truncate" title={p.description}>
-                        {p.description}
-                      </span>
+                    ))
+                  ) : (
+                    <div className="text-xs text-slate-500 italic p-2 bg-slate-50 rounded">
+                      No recent alert incidents.
                     </div>
-                  ))
-                ) : (
-                  <div className="text-xs text-slate-500 italic p-2 bg-slate-50 rounded">
-                    No exposed public ports found. System is in stealth mode.
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
 
-            {/* Recent Node Activity Log */}
-            <div>
-              <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Recent Security & Telemetry Events
-              </h4>
-              <div className="space-y-1.5 text-xs">
-                {selectedNode.recentActivity && selectedNode.recentActivity.length > 0 ? (
-                  selectedNode.recentActivity.map((act, idx) => (
-                    <div
-                      key={idx}
-                      className="p-2 bg-slate-50 border border-slate-200 rounded flex items-center justify-between gap-2"
-                    >
-                      <span className="text-slate-800">{act.event}</span>
-                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
-                        {new Date(act.timestampUtc).toLocaleTimeString()}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-xs text-slate-500 italic p-2 bg-slate-50 rounded">
-                    No recent alert incidents.
-                  </div>
-                )}
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  onClick={() => handleScanFiles(activeModalNode.id)}
+                  disabled={actionInProgress === `scan-${activeModalNode.id}`}
+                  className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-2xs flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${actionInProgress === `scan-${activeModalNode.id}` ? 'animate-spin' : ''}`} />
+                  {actionInProgress === `scan-${activeModalNode.id}` ? 'Scanning Files & Telemetry...' : 'Run Deep Security Scan'}
+                </button>
+                <button
+                  onClick={() => setSelectedNode(null)}
+                  className="px-3 py-1.5 text-xs font-semibold bg-slate-100 text-slate-700 rounded hover:bg-slate-200 transition-colors"
+                >
+                  Close
+                </button>
               </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                onClick={() => scanMutation.mutate(selectedNode.id)}
-                disabled={scanMutation.isPending}
-                className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors shadow-2xs"
-              >
-                {scanMutation.isPending ? 'Scanning...' : 'Run Security Scan'}
-              </button>
-              <button
-                onClick={() => setSelectedNode(null)}
-                className="px-3 py-1.5 text-xs font-semibold bg-slate-100 text-slate-700 rounded hover:bg-slate-200 transition-colors"
-              >
-                Close
-              </button>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Enroll Remote Laptop Modal */}
       {isEnrollModalOpen && (

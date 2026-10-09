@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
-title Personal Cybersecurity Bot - Unified Web Platform
+title Shield Labs Bot - Unified Web Platform
 
 echo ====================================================================
-echo   Personal Cybersecurity Bot - Unified Web Security & Fleet Platform
+echo   Shield Labs Bot - Unified Web Security & Fleet Platform
 echo   Defensive, Privacy-First Endpoint & Fleet Management Console
 echo ====================================================================
 echo.
@@ -28,7 +28,7 @@ if "%choice%"=="2" (
 :: Default: Choice 1 - Launch Unified Web Platform
 echo.
 echo Starting Unified Web Security & Fleet Platform on http://127.0.0.1:3000...
-start "Personal Cybersecurity Bot" cmd /k "npm.cmd run start"
+start "Shield Labs Bot" cmd /k "npm.cmd run start"
 
 echo Opening browser dashboard...
 timeout /t 3 >nul

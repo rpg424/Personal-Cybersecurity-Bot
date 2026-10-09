@@ -15,8 +15,10 @@ import {
   Copy,
   LifeBuoy,
   Key,
+  Mail,
 } from 'lucide-react';
 import { api } from '../api/client';
+import { UserRole } from '../types/security';
 
 interface LoginPageProps {
   onLoginSuccess: () => void;
@@ -59,10 +61,66 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [inputUserName, setInputUserName] = useState(storedUserName);
   const [inputDeviceName, setInputDeviceName] = useState(storedDeviceName);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  // Main Tab: Sign In vs Create Account
+  type MainTab = 'signin' | 'signup';
+  const [mainTab, setMainTab] = useState<MainTab>('signin');
+
+  // Sign up fields
+  const [signupFullName, setSignupFullName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [signupRole, setSignupRole] = useState<UserRole>('ADMIN');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleSignup = async () => {
+    if (!signupFullName.trim()) {
+      setErrorMessage('Please enter your full name.');
+      return;
+    }
+    if (!signupEmail.trim() || !signupEmail.includes('@')) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    if (!signupPassword.trim() || signupPassword.trim().length < 4) {
+      setErrorMessage('Password must be at least 4 characters in length.');
+      return;
+    }
+    if (signupPassword.trim() !== signupConfirmPassword.trim()) {
+      setErrorMessage('Password confirmation does not match.');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage(null);
+
+    try {
+      const res = await api.signupUser({
+        fullName: signupFullName.trim(),
+        email: signupEmail.trim(),
+        password: signupPassword.trim(),
+        role: signupRole,
+        deviceName: inputDeviceName,
+      });
+
+      localStorage.setItem('pcb_user_name', signupFullName.trim());
+      localStorage.setItem('pcb_user_email', signupEmail.trim());
+      localStorage.setItem('pcb_user_role', signupRole);
+      if (res.user?.id) localStorage.setItem('pcb_user_id', res.user.id);
+
+      setSuccessMessage(`Account created for ${signupFullName.trim()}! Redirecting…`);
+      setTimeout(() => {
+        onLoginSuccess();
+      }, 400);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to create user account. Please try again.');
+      setIsLoading(false);
+    }
+  };
 
   // Sync props when received from server
   useEffect(() => {
@@ -91,13 +149,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (res.user_name) localStorage.setItem('pcb_user_name', res.user_name);
       if (res.device_name) localStorage.setItem('pcb_device_name', res.device_name);
 
-      setSuccessMessage('Console successfully unlocked.');
+      setSuccessMessage('Console successfully unlocked. Loading dashboard…');
+      // Keep spinner alive during transition — don't setIsLoading(false) here
       setTimeout(() => {
         onLoginSuccess();
       }, 300);
     } catch (err: any) {
       setErrorMessage(err.message || 'Incorrect PIN or passphrase. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -219,7 +277,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
 
           <h1 className="text-xl font-bold tracking-tight text-slate-900">
-            Personal Cybersecurity Bot
+            Shield Labs Bot
           </h1>
           <p className="text-xs text-slate-500 mt-1 font-medium">
             Defensive Windows Security Console · Authority Guard
@@ -231,7 +289,168 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         </div>
 
+        {/* Sign In vs Create Account Toggle Tabs */}
+        <div className="flex border-b border-slate-200 bg-slate-50">
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab('signin');
+              setErrorMessage(null);
+            }}
+            className={`flex-1 py-3 text-xs font-bold text-center border-b-2 transition-all ${
+              mainTab === 'signin'
+                ? 'border-emerald-600 text-emerald-800 bg-white shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMainTab('signup');
+              setErrorMessage(null);
+            }}
+            className={`flex-1 py-3 text-xs font-bold text-center border-b-2 transition-all ${
+              mainTab === 'signup'
+                ? 'border-emerald-600 text-emerald-800 bg-white shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Create Account
+          </button>
+        </div>
+
         {/* Form Body */}
+        {mainTab === 'signup' ? (
+          <div className="p-8 space-y-4">
+            {errorMessage && (
+              <div
+                role="alert"
+                className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2"
+              >
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{errorMessage}</span>
+              </div>
+            )}
+            {successMessage && (
+              <div
+                role="status"
+                className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2"
+              >
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{successMessage}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={signupFullName}
+                  onChange={(e) => setSignupFullName(e.target.value)}
+                  placeholder="e.g. Alice Walker"
+                  className="w-full px-3 py-2 pl-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <User className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
+              <div className="relative">
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  placeholder="alice@shieldlabs.local"
+                  className="w-full px-3 py-2 pl-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Security Role</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(['ADMIN', 'SECURITY_ANALYST', 'AUDITOR'] as UserRole[]).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setSignupRole(r)}
+                    className={`py-2 px-1 text-[10px] font-bold rounded-lg border text-center transition-all ${
+                      signupRole === r
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-1 ring-emerald-500'
+                        : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {r === 'ADMIN' ? 'Admin' : r === 'SECURITY_ANALYST' ? 'Analyst' : 'Auditor'}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                {signupRole === 'ADMIN' && 'Full access: device controls, policy modification, and remediation.'}
+                {signupRole === 'SECURITY_ANALYST' && 'Investigative access: deep threat inspection and remote fleet quarantine.'}
+                {signupRole === 'AUDITOR' && 'Read-only access: compliance verification and immutable security logs.'}
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Password / PIN</label>
+              <div className="relative">
+                <input
+                  type={showSignupPassword ? 'text' : 'password'}
+                  value={signupPassword}
+                  onChange={(e) => setSignupPassword(e.target.value)}
+                  placeholder="Minimum 4 characters"
+                  className="w-full px-3 py-2 pl-9 pr-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <button
+                  type="button"
+                  onClick={() => setShowSignupPassword(!showSignupPassword)}
+                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                >
+                  {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm Password</label>
+              <div className="relative">
+                <input
+                  type={showSignupPassword ? 'text' : 'password'}
+                  value={signupConfirmPassword}
+                  onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                  className="w-full px-3 py-2 pl-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                />
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={handleSignup}
+              className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white transition-colors shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating Account…
+                </>
+              ) : (
+                <>
+                  Create Account & Enter Console
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
         <div className="p-8 space-y-5">
           {/* User & Device Profile Card */}
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70">
@@ -682,11 +901,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </p>
           </div>
         </div>
+        )}
       </div>
 
       {/* Footer Info */}
       <footer className="mt-6 text-center text-xs text-slate-500 space-y-1">
-        <div>Personal Cybersecurity Bot · Loopback IPC (127.0.0.1)</div>
+        <div>Shield Labs Bot · Loopback IPC (127.0.0.1)</div>
         <div className="text-[11px] text-slate-400">Strict local storage isolation · Zero cloud credential leakage</div>
       </footer>
     </div>

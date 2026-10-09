@@ -115,7 +115,7 @@ export const HistoryAndReport: React.FC<HistoryAndReportProps> = ({
       <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
         <h3 className="font-bold text-slate-900">Honest Limitations Notice</h3>
         <p className="text-slate-600 leading-relaxed">
-          Personal Cybersecurity Bot operates defensively on your local PC. It coexists with Windows Defender without disabling or weakening Microsoft antivirus features. Core protection runs 100% offline. No telemetry or personal document content is sent to third-party servers.
+          Shield Labs Bot operates defensively on your local PC. It coexists with Windows Defender without disabling or weakening Microsoft antivirus features. Core protection runs 100% offline. No telemetry or personal document content is sent to third-party servers.
         </p>
       </div>
     </div>

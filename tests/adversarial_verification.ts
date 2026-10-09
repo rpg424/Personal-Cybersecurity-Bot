@@ -1,5 +1,5 @@
 /**
- * Personal Cybersecurity Bot - Adversarial Verification Test Suite
+ * Shield Labs Bot - Adversarial Verification Test Suite
  * Validates Phase C scenarios: normal, error, permission-denied, duplicate,
  * idempotency, revalidation, and rollback contracts.
  */
@@ -17,7 +17,7 @@ interface TestResult {
 const results: TestResult[] = [];
 
 async function runTests() {
-  console.log('--- Starting Personal Cybersecurity Bot Test Suite ---');
+  console.log('--- Starting Shield Labs Bot Test Suite ---');
 
   // Test 1: Enrollment Discovery & Token Acquisition
   try {
@@ -305,7 +305,7 @@ async function runTests() {
       headers: { Authorization: `Bearer ${token}` },
     });
     const exportData = await exportRes.json();
-    if (exportRes.status === 200 && exportData.product === 'Personal Cybersecurity Bot' && exportData.audit_events) {
+    if (exportRes.status === 200 && exportData.product === 'Shield Labs Bot' && exportData.audit_events) {
       results.push({
         testName: 'REQ-12: Full Authenticated Local Data Export',
         status: 'PASSED',
@@ -464,7 +464,7 @@ async function runTests() {
   }
 
   // Print Summary
-  console.log('\n--- Personal Cybersecurity Bot Verification Results ---');
+  console.log('\n--- Shield Labs Bot Verification Results ---');
   results.forEach((r) => {
     console.log(`[${r.status}] ${r.testName}: ${r.details}`);
   });

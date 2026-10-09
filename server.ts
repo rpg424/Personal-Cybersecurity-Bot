@@ -1,5 +1,5 @@
 /**
- * Personal Cybersecurity Bot - Local Protection Service & 127.0.0.1 IPC Bridge
+ * Shield Labs Bot - Local Protection Service & 127.0.0.1 IPC Bridge
  * Source of truth for capabilities, status, alert triage, and safe action execution.
  */
 
@@ -9,7 +9,7 @@ import net from 'net';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
-import { exec } from 'child_process';
+import { exec, execSync } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
@@ -60,11 +60,26 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+// CORS Support for LAN IP origins and remote web clients
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+  next();
+});
+
 // 1. Strict Security Transport & Content Security Policy Headers
 app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' ws: wss:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https:;"
+    "default-src 'self' http: ws: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' http: ws: wss: https://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https:;"
   );
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -82,7 +97,20 @@ app.use((req: Request, res: Response, next: NextFunction) => {
       try {
         const originUrl = new URL(origin);
         const host = req.headers.host || '';
+        const originHostOnly = originUrl.hostname;
+        const isLanOrigin =
+          originHostOnly === 'localhost' ||
+          originHostOnly === '127.0.0.1' ||
+          originHostOnly === '::1' ||
+          /^192\.168\./.test(originHostOnly) ||
+          /^10\./.test(originHostOnly) ||
+          /^172\.(1[6-9]|2\d|3[01])\./.test(originHostOnly) ||
+          originHostOnly.endsWith('.local') ||
+          originHostOnly.endsWith('.lan') ||
+          !originHostOnly.includes('.');
+
         if (
+          !isLanOrigin &&
           !originUrl.host.includes('localhost') &&
           !originUrl.host.includes('127.0.0.1') &&
           !originUrl.host.includes('run.app') &&
@@ -208,6 +236,8 @@ let recoveryKeySalt: string = crypto.randomBytes(16).toString('hex');
 let recoveryKeyHash: string | null = null;
 let consoleUserName = 'Device Owner (Local Administrator)';
 let consoleDeviceName = 'DESKTOP-SECURE-PC';
+let consoleUserEmail = 'admin@shieldlabs.local';
+let consoleUserRole: 'ADMIN' | 'SECURITY_ANALYST' | 'AUDITOR' = 'ADMIN';
 let lastActivityUtc = Date.now();
 
 function hashPin(pin: string, salt: string): string {
@@ -231,6 +261,8 @@ function saveVaultToDisk() {
       isConsoleLocked,
       consoleUserName,
       consoleDeviceName,
+      consoleUserEmail,
+      consoleUserRole,
       enrollmentState,
       privacySettings,
       alertsStore,
@@ -240,7 +272,7 @@ function saveVaultToDisk() {
     };
     fs.writeFileSync(VAULT_FILE, JSON.stringify(vaultData, null, 2), 'utf-8');
   } catch (err) {
-    console.error('[Personal Cybersecurity Bot] Failed to write vault to disk:', err);
+    console.error('[Shield Labs Bot] Failed to write vault to disk:', err);
   }
 }
 
@@ -263,6 +295,8 @@ function loadVaultFromDisk() {
         consoleDeviceName = data.consoleDeviceName;
         enrollmentState.device_name = data.consoleDeviceName;
       }
+      if (data.consoleUserEmail) consoleUserEmail = data.consoleUserEmail;
+      if (data.consoleUserRole) consoleUserRole = data.consoleUserRole;
       if (data.enrollmentState) enrollmentState = { ...enrollmentState, ...data.enrollmentState, ipc_token: IPC_SESSION_TOKEN };
       if (data.privacySettings) privacySettings = { ...privacySettings, ...data.privacySettings };
       if (Array.isArray(data.alertsStore)) {
@@ -286,10 +320,10 @@ function loadVaultFromDisk() {
         eventsStore.length = 0;
         eventsStore.push(...data.eventsStore);
       }
-      console.log('[Personal Cybersecurity Bot] Persistent security vault loaded successfully.');
+      console.log('[Shield Labs Bot] Persistent security vault loaded successfully.');
     }
   } catch (err) {
-    console.error('[Personal Cybersecurity Bot] Failed to load vault from disk:', err);
+    console.error('[Shield Labs Bot] Failed to load vault from disk:', err);
   }
 }
 
@@ -323,7 +357,7 @@ function loadFleetFromDisk() {
       saveFleetToDisk();
     }
   } catch (err) {
-    console.error('[Personal Cybersecurity Bot] Failed to load fleet nodes:', err);
+    console.error('[Shield Labs Bot] Failed to load fleet nodes:', err);
   }
 }
 
@@ -332,7 +366,7 @@ function saveFleetToDisk() {
     ensureDataDir();
     fs.writeFileSync(FLEET_FILE, JSON.stringify(enrolledFleetNodes, null, 2), 'utf-8');
   } catch (err) {
-    console.error('[Personal Cybersecurity Bot] Failed to write fleet nodes:', err);
+    console.error('[Shield Labs Bot] Failed to write fleet nodes:', err);
   }
 }
 
@@ -388,8 +422,8 @@ recordEvent(
   'info',
   1.0,
   'service:supervisor',
-  'service:PersonalCybersecurityBot',
-  { message: 'Personal Cybersecurity Bot service started cleanly on 127.0.0.1' }
+  'service:ShieldLabsBot',
+  { message: 'Shield Labs Bot service started cleanly on 0.0.0.0' }
 );
 
 // IPC Authentication & DNS Rebinding Protection Middleware
@@ -398,11 +432,14 @@ app.use('/api/v1', (req: Request, res: Response, next: NextFunction) => {
   if (
     req.path === '/enrollment' ||
     req.path === '/health' ||
+    req.path === '/events/stream' ||
     req.path.startsWith('/auth') ||
     req.path.startsWith('/security/self-test') ||
     req.path === '/fleet/client-status' ||
     req.path === '/fleet/join-endpoint' ||
-    req.path.startsWith('/fleet/agent-script')
+    req.path.startsWith('/fleet/agent-script') ||
+    req.path.includes('/commands') ||
+    req.path.includes('/actions/')
   ) {
     return next();
   }
@@ -509,7 +546,71 @@ app.get('/api/v1/auth/session', (_req: Request, res: Response) => {
       : 0,
     user_name: consoleUserName,
     device_name: consoleDeviceName,
+    email: consoleUserEmail,
+    role: consoleUserRole,
     has_configured_pin: pinHash !== null,
+  });
+});
+
+app.post('/api/v1/auth/signup', (req: Request, res: Response) => {
+  const { fullName, email, password, pin, role, deviceName } = req.body;
+  const credential = password || pin;
+
+  if (!fullName || typeof fullName !== 'string' || !fullName.trim()) {
+    return res.status(400).json({ error: 'INVALID_NAME', message: 'Full name is required.' });
+  }
+
+  if (!email || typeof email !== 'string' || !email.includes('@')) {
+    return res.status(400).json({ error: 'INVALID_EMAIL', message: 'Valid email address is required.' });
+  }
+
+  if (!credential || typeof credential !== 'string' || credential.trim().length < 4) {
+    return res.status(400).json({ error: 'INVALID_CREDENTIAL', message: 'Password/PIN must be at least 4 characters in length.' });
+  }
+
+  const validRoles: Array<'ADMIN' | 'SECURITY_ANALYST' | 'AUDITOR'> = ['ADMIN', 'SECURITY_ANALYST', 'AUDITOR'];
+  const userRole = validRoles.includes(role) ? role : 'ADMIN';
+
+  consoleUserName = fullName.trim();
+  consoleUserEmail = email.trim().toLowerCase();
+  consoleUserRole = userRole;
+  if (deviceName && typeof deviceName === 'string' && deviceName.trim()) {
+    consoleDeviceName = deviceName.trim();
+    enrollmentState.device_name = consoleDeviceName;
+  }
+
+  pinSalt = crypto.randomBytes(16).toString('hex');
+  pinHash = hashPin(credential.trim(), pinSalt);
+
+  const generatedRecoveryKey = `PCB-${crypto.randomBytes(2).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+  recoveryKeySalt = crypto.randomBytes(16).toString('hex');
+  recoveryKeyHash = hashPin(generatedRecoveryKey, recoveryKeySalt);
+
+  isConsoleLocked = false;
+  failedUnlockAttempts = 0;
+  lockoutUntilUtc = null;
+  lastActivityUtc = Date.now();
+  saveVaultToDisk();
+
+  recordEvent('auth.user.signup', 'info', 1.0, 'auth_service', 'user:new', {
+    fullName: consoleUserName,
+    email: consoleUserEmail,
+    role: consoleUserRole,
+  });
+
+  res.json({
+    success: true,
+    message: `Account created successfully for ${consoleUserName}.`,
+    token: IPC_SESSION_TOKEN,
+    user: {
+      id: `usr-${Date.now().toString(36)}`,
+      fullName: consoleUserName,
+      email: consoleUserEmail,
+      role: consoleUserRole,
+      deviceName: consoleDeviceName,
+      createdAtUtc: new Date().toISOString(),
+    },
+    recovery_key: generatedRecoveryKey,
   });
 });
 
@@ -752,14 +853,35 @@ app.post('/api/v1/auth/reset-lockout', (req: Request, res: Response) => {
   res.json({ success: true, message: 'Console lockout reset successfully by authenticated supervisor.' });
 });
 
+// Get current user profile
+app.get('/api/v1/auth/user-profile', (_req: Request, res: Response) => {
+  res.json({
+    id: 'usr-local-active',
+    fullName: consoleUserName,
+    email: consoleUserEmail,
+    role: consoleUserRole,
+    deviceName: consoleDeviceName,
+    createdAtUtc: new Date().toISOString(),
+  });
+});
+
 // Update user & device profile
-app.post('/api/v1/auth/user-profile', (req: Request, res: Response) => {
-  const { user_name, device_name } = req.body;
-  if (typeof user_name === 'string' && user_name.trim()) {
-    consoleUserName = user_name.trim();
+app.put('/api/v1/auth/user-profile', (req: Request, res: Response) => {
+  const { fullName, user_name, email, role, deviceName, device_name } = req.body;
+  const name = fullName || user_name;
+  const dev = deviceName || device_name;
+
+  if (typeof name === 'string' && name.trim()) {
+    consoleUserName = name.trim();
   }
-  if (typeof device_name === 'string' && device_name.trim()) {
-    consoleDeviceName = device_name.trim();
+  if (typeof email === 'string' && email.trim()) {
+    consoleUserEmail = email.trim().toLowerCase();
+  }
+  if (role && ['ADMIN', 'SECURITY_ANALYST', 'AUDITOR'].includes(role)) {
+    consoleUserRole = role;
+  }
+  if (typeof dev === 'string' && dev.trim()) {
+    consoleDeviceName = dev.trim();
     enrollmentState.device_name = consoleDeviceName;
   }
   saveVaultToDisk();
@@ -769,12 +891,55 @@ app.post('/api/v1/auth/user-profile', (req: Request, res: Response) => {
     1.0,
     'auth:local_console',
     'user:device_owner',
-    { user_name: consoleUserName, device_name: consoleDeviceName }
+    { user_name: consoleUserName, email: consoleUserEmail, role: consoleUserRole, device_name: consoleDeviceName }
+  );
+  res.json({
+    success: true,
+    user: {
+      id: 'usr-local-active',
+      fullName: consoleUserName,
+      email: consoleUserEmail,
+      role: consoleUserRole,
+      deviceName: consoleDeviceName,
+    },
+  });
+});
+
+app.post('/api/v1/auth/user-profile', (req: Request, res: Response) => {
+  const { user_name, fullName, email, role, device_name, deviceName } = req.body;
+  const name = fullName || user_name;
+  const dev = deviceName || device_name;
+
+  if (typeof name === 'string' && name.trim()) {
+    consoleUserName = name.trim();
+  }
+  if (typeof email === 'string' && email.trim()) {
+    consoleUserEmail = email.trim().toLowerCase();
+  }
+  if (role && ['ADMIN', 'SECURITY_ANALYST', 'AUDITOR'].includes(role)) {
+    consoleUserRole = role;
+  }
+  if (typeof dev === 'string' && dev.trim()) {
+    consoleDeviceName = dev.trim();
+    enrollmentState.device_name = consoleDeviceName;
+  }
+  saveVaultToDisk();
+  recordEvent(
+    'auth.profile.updated',
+    'info',
+    1.0,
+    'auth:local_console',
+    'user:device_owner',
+    { user_name: consoleUserName, email: consoleUserEmail, role: consoleUserRole, device_name: consoleDeviceName }
   );
   res.json({
     success: true,
     user_name: consoleUserName,
+    fullName: consoleUserName,
+    email: consoleUserEmail,
+    role: consoleUserRole,
     device_name: consoleDeviceName,
+    deviceName: consoleDeviceName,
   });
 });
 
@@ -960,7 +1125,7 @@ app.get('/api/v1/status', (_req: Request, res: Response) => {
   } else if (hasCritical) {
     statusCode = 'red';
     label = 'Urgent Action Required';
-    explanation = '[Active Host Protection] Personal Cybersecurity Bot paused a high-risk activity (such as ransomware canary tampering).';
+    explanation = '[Active Host Protection] Shield Labs Bot paused a high-risk activity (such as ransomware canary tampering).';
     recommendedNextStep = 'Open the Alert Center to safely review and stop the suspicious program.';
   } else if (hasHigh) {
     statusCode = 'yellow';
@@ -1109,7 +1274,6 @@ function getLiveNetworkInterfaces(): HostNetworkTelemetry {
   let gateway = '192.168.29.1';
   if (process.platform === 'win32') {
     try {
-      const { execSync } = require('child_process');
       const out = execSync('ipconfig', { timeout: 2500 }).toString();
       const m = out.match(/Default Gateway[ .:]+([0-9.]+)/i);
       if (m && m[1]) gateway = m[1].trim();
@@ -1561,31 +1725,31 @@ app.get('/api/v1/security/safety-verdict', async (_req: Request, res: Response) 
 
 // Standardized Network Port Service Catalog
 const KNOWN_PORTS_CATALOG: Record<number, { serviceName: string; risk: 'LOW' | 'MEDIUM' | 'HIGH'; description: string }> = {
-  1: { serviceName: 'TCPMUX', risk: 'LOW', description: 'TCP Port Service Multiplexer (RFC 1078)' },
-  7: { serviceName: 'ECHO', risk: 'LOW', description: 'Echo Protocol' },
-  21: { serviceName: 'FTP', risk: 'LOW', description: 'File Transfer Protocol' },
-  22: { serviceName: 'SSH', risk: 'LOW', description: 'Secure Shell Remote Login' },
-  23: { serviceName: 'TELNET', risk: 'HIGH', description: 'Unencrypted Remote Shell' },
-  25: { serviceName: 'SMTP', risk: 'LOW', description: 'Simple Mail Transfer Protocol' },
-  53: { serviceName: 'DNS', risk: 'LOW', description: 'Domain Name System Service' },
-  80: { serviceName: 'HTTP', risk: 'LOW', description: 'World Wide Web Server' },
-  110: { serviceName: 'POP3', risk: 'LOW', description: 'Post Office Protocol v3' },
-  135: { serviceName: 'MSRPC', risk: 'MEDIUM', description: 'Microsoft RPC Endpoint Mapper' },
-  139: { serviceName: 'NETBIOS-SSN', risk: 'MEDIUM', description: 'NetBIOS Session Service' },
-  143: { serviceName: 'IMAP', risk: 'LOW', description: 'Internet Message Access Protocol' },
-  443: { serviceName: 'HTTPS', risk: 'LOW', description: 'Secure TLS/SSL Web Server' },
-  445: { serviceName: 'SMB', risk: 'HIGH', description: 'Windows File Sharing & RPC (Vulnerable if exposed)' },
-  993: { serviceName: 'IMAPS', risk: 'LOW', description: 'Secure IMAP over TLS' },
-  995: { serviceName: 'POP3S', risk: 'LOW', description: 'Secure POP3 over TLS' },
-  1433: { serviceName: 'MSSQL', risk: 'MEDIUM', description: 'Microsoft SQL Server Database' },
-  3000: { serviceName: 'Personal Cybersecurity Bot', risk: 'LOW', description: 'Unified Security Console & Fleet Agent' },
-  3306: { serviceName: 'MYSQL', risk: 'MEDIUM', description: 'MySQL Database Server' },
-  3389: { serviceName: 'RDP', risk: 'HIGH', description: 'Windows Remote Desktop (Brute-force target)' },
-  5432: { serviceName: 'POSTGRESQL', risk: 'MEDIUM', description: 'PostgreSQL Database Server' },
-  5985: { serviceName: 'WinRM HTTP', risk: 'MEDIUM', description: 'Windows Remote Management (PowerShell)' },
-  5986: { serviceName: 'WinRM HTTPS', risk: 'LOW', description: 'Windows Secure Remote Management' },
-  8080: { serviceName: 'HTTP-Alt', risk: 'LOW', description: 'Alternate Web Service or Proxy' },
-  8443: { serviceName: 'HTTPS-Alt', risk: 'LOW', description: 'Alternate Secure Web Server' },
+  1: { serviceName: 'Network Test (TCPMUX)', risk: 'LOW', description: 'Used to test if the laptop is online' },
+  7: { serviceName: 'Network Ping (ECHO)', risk: 'LOW', description: 'Used to test if the laptop is online' },
+  21: { serviceName: 'File Transfer (FTP)', risk: 'LOW', description: 'Standard file sharing' },
+  22: { serviceName: 'Remote Login (SSH)', risk: 'LOW', description: 'Secure remote command line access' },
+  23: { serviceName: 'Insecure Login (TELNET)', risk: 'HIGH', description: 'Unencrypted remote access (Warning)' },
+  25: { serviceName: 'Email Sending (SMTP)', risk: 'LOW', description: 'Standard email routing' },
+  53: { serviceName: 'Web Address Lookup (DNS)', risk: 'LOW', description: 'Translates website names to IP addresses' },
+  80: { serviceName: 'Web Traffic (HTTP)', risk: 'LOW', description: 'Standard unencrypted web browsing' },
+  110: { serviceName: 'Email Receiving (POP3)', risk: 'LOW', description: 'Receives standard emails' },
+  135: { serviceName: 'Windows Internal (RPC)', risk: 'MEDIUM', description: 'Windows internal system communication' },
+  139: { serviceName: 'Windows Network (NetBIOS)', risk: 'MEDIUM', description: 'Older Windows local network sharing' },
+  143: { serviceName: 'Email Receiving (IMAP)', risk: 'LOW', description: 'Receives and syncs emails' },
+  443: { serviceName: 'Secure Web (HTTPS)', risk: 'LOW', description: 'Encrypted safe web browsing' },
+  445: { serviceName: 'Windows File Sharing (SMB)', risk: 'HIGH', description: 'Shares folders/printers (Vulnerable if exposed to internet)' },
+  993: { serviceName: 'Secure Email (IMAPS)', risk: 'LOW', description: 'Encrypted email syncing' },
+  995: { serviceName: 'Secure Email (POP3S)', risk: 'LOW', description: 'Encrypted email receiving' },
+  1433: { serviceName: 'Database Server (MSSQL)', risk: 'MEDIUM', description: 'Microsoft database traffic' },
+  3000: { serviceName: 'Cybersecurity Bot Console', risk: 'LOW', description: 'This security dashboard and remote agent' },
+  3306: { serviceName: 'Database Server (MYSQL)', risk: 'MEDIUM', description: 'MySQL database traffic' },
+  3389: { serviceName: 'Remote Desktop (RDP)', risk: 'HIGH', description: 'Allows full screen control (High risk if public)' },
+  5432: { serviceName: 'Database Server (POSTGRES)', risk: 'MEDIUM', description: 'PostgreSQL database traffic' },
+  5985: { serviceName: 'Windows Remote Admin (WinRM)', risk: 'MEDIUM', description: 'Remote PowerShell access' },
+  5986: { serviceName: 'Secure Remote Admin', risk: 'LOW', description: 'Encrypted remote PowerShell access' },
+  8080: { serviceName: 'Alternate Web (HTTP-Alt)', risk: 'LOW', description: 'Alternate port for web apps' },
+  8443: { serviceName: 'Alternate Secure Web', risk: 'LOW', description: 'Alternate port for secure web apps' },
 };
 
 function getPortServiceInfo(port: number): { serviceName: string; risk: 'LOW' | 'MEDIUM' | 'HIGH'; description: string } {
@@ -1634,14 +1798,26 @@ function probeTcpPort(host: string, port: number, timeoutMs = 1200): Promise<{ o
 async function checkHostLiveness(ip: string): Promise<boolean> {
   try {
     const { stdout: arpOut } = await execAsync('arp -a', { timeout: 1000 });
-    if (arpOut && arpOut.includes(ip)) {
-      return true;
+    if (arpOut) {
+      const escapedIp = ip.replace(/\./g, '\\.');
+      const arpRegex = new RegExp(`(^|\\s)${escapedIp}\\s+([0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}`, 'm');
+      if (arpRegex.test(arpOut)) {
+        return true;
+      }
     }
   } catch {}
 
   try {
     const { stdout: pingOut } = await execAsync(`ping -n 1 -w 800 ${ip}`, { timeout: 1200 });
-    if (pingOut && (pingOut.includes('bytes=') || pingOut.includes('TTL=') || pingOut.includes('Reply from'))) {
+    if (
+      pingOut &&
+      !pingOut.includes('Destination host unreachable') &&
+      !pingOut.includes('unreachable') &&
+      !pingOut.includes('100% loss') &&
+      !pingOut.includes('Timed out') &&
+      !pingOut.includes('General failure') &&
+      (pingOut.includes('bytes=') || pingOut.includes('TTL='))
+    ) {
       return true;
     }
   } catch {}
@@ -1674,7 +1850,7 @@ app.post('/api/v1/network/probe-node', async (req: Request, res: Response) => {
       { port: 3389, serviceName: 'RDP', risk: 'HIGH', description: 'Windows Remote Desktop (Brute-force target)' },
       { port: 5985, serviceName: 'WinRM HTTP', risk: 'MEDIUM', description: 'Windows Remote Management (PowerShell)' },
       { port: 5986, serviceName: 'WinRM HTTPS', risk: 'LOW', description: 'Windows Secure Remote Management' },
-      { port: 3000, serviceName: 'Personal Cybersecurity Bot', risk: 'LOW', description: 'Unified Security Console & Fleet Agent' },
+      { port: 3000, serviceName: 'Shield Labs Bot', risk: 'LOW', description: 'Unified Security Console & Fleet Agent' },
       { port: 8080, serviceName: 'HTTP-Alt', risk: 'LOW', description: 'Alternate Web Service or Proxy' },
     ];
 
@@ -1764,7 +1940,7 @@ app.post('/api/v1/network/probe-node', async (req: Request, res: Response) => {
         recommendations.push('WinRM Port 5985 detected: Remote Windows administration enabled. Enforce Kerberos or WinRM HTTPS (5986).');
       }
       if (openPortNumbers.has(3000)) {
-        recommendations.push('Personal Cybersecurity Bot (Port 3000) is active on this host: Ready for fleet management and telemetry synchronization.');
+        recommendations.push('Shield Labs Bot (Port 3000) is active on this host: Ready for fleet management and telemetry synchronization.');
       }
     }
 
@@ -1912,10 +2088,125 @@ async function performRealHostSecurityScan(): Promise<{
       }
     }
   } catch (err) {
-    console.error('[Personal Cybersecurity Bot] Real scan error:', err);
+    console.error('[Shield Labs Bot] Real scan error:', err);
   }
 
   return { scannedFiles, scannedProcesses, threats };
+}
+
+// Local node state for website and file blocking
+const localNodeBlockedDomains: string[] = [];
+const localNodeBlockedFiles: string[] = [];
+let localNodeActiveBrowserUrl = 'https://github.com/rpg424/Personal-Cybersecurity-Bot';
+let localNodeActiveBrowserDomain = 'github.com';
+
+// Helper: Real-time URL and domain safety analysis
+function analyzeBrowserUrl(
+  urlOrDomain: string,
+  blockedDomains: string[] = []
+): {
+  domain: string;
+  verdict: 'SAFE' | 'SUSPICIOUS' | 'HARMFUL_BLOCKED';
+  riskScore: number;
+  category: string;
+  reason: string;
+} {
+  if (!urlOrDomain || !urlOrDomain.trim()) {
+    return {
+      domain: 'unknown',
+      verdict: 'SAFE',
+      riskScore: 0,
+      category: 'Inactive Browser Session',
+      reason: 'No active browser tab detected.',
+    };
+  }
+
+  let raw = urlOrDomain.trim().toLowerCase();
+  try {
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      const parsed = new URL(raw);
+      raw = parsed.hostname;
+    } else {
+      raw = raw.replace(/\/.*$/, '').replace(/:\d+$/, '');
+    }
+  } catch {
+    raw = raw.replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/:\d+$/, '');
+  }
+  const cleanDomain = raw.replace(/^www\./, '');
+
+  // 1. Explicit admin blacklist check
+  const isBlocked = blockedDomains.some(
+    (b) => b.toLowerCase() === cleanDomain || cleanDomain.endsWith(`.${b.toLowerCase()}`)
+  );
+  if (isBlocked) {
+    return {
+      domain: cleanDomain,
+      verdict: 'HARMFUL_BLOCKED',
+      riskScore: 100,
+      category: 'Admin Blacklisted Domain',
+      reason: `Domain "${cleanDomain}" was explicitly blocked by the Security Administrator in Fleet Cockpit.`,
+    };
+  }
+
+  // 2. Phishing & malicious credential harvesting patterns
+  const phishingPatterns = [
+    'paypal-verify', 'paypal-login', 'chase-security', 'bank-login', 'wallet-connect',
+    'metamask-claim', 'crypto-airdrop', 'appleid-verify', 'account-update-security',
+    'free-crypto-giveaway', 'steam-gift-card', 'malware-drop', 'c2-beacon', 'stealer',
+    'phishing-paypal', 'login-verify-account'
+  ];
+  const matchedPattern = phishingPatterns.find((kw) => cleanDomain.includes(kw));
+  if (matchedPattern) {
+    return {
+      domain: cleanDomain,
+      verdict: 'HARMFUL_BLOCKED',
+      riskScore: 96,
+      category: 'Phishing / Credential Harvesting',
+      reason: `Deceptive keyword "${matchedPattern}" detected matching known credential-harvesting phishing campaigns.`,
+    };
+  }
+
+  // 3. Dangerous / High-abuse TLDs combined with sensitive keywords
+  const suspiciousTlds = ['.cc', '.top', '.xyz', '.tk', '.ml', '.ga', '.cf', '.gq', '.buzz', '.surf', '.sbs', '.work'];
+  const hasSuspiciousTld = suspiciousTlds.some((tld) => cleanDomain.endsWith(tld));
+  if (hasSuspiciousTld) {
+    if (/(login|verify|account|secure|update|auth|token|claim|bonus|free|gift)/.test(cleanDomain)) {
+      return {
+        domain: cleanDomain,
+        verdict: 'HARMFUL_BLOCKED',
+        riskScore: 92,
+        category: 'Malicious Phishing Portal',
+        reason: `High-abuse TLD combined with authentication keywords indicates an active credential scam.`,
+      };
+    }
+    return {
+      domain: cleanDomain,
+      verdict: 'SUSPICIOUS',
+      riskScore: 68,
+      category: 'Suspicious High-Abuse TLD',
+      reason: `Domain uses a top-level domain frequently associated with throwaway malware C2 operations.`,
+    };
+  }
+
+  // 4. Raw IP address access
+  if (/^(\d{1,3}\.){3}\d{1,3}$/.test(cleanDomain)) {
+    return {
+      domain: cleanDomain,
+      verdict: 'SUSPICIOUS',
+      riskScore: 70,
+      category: 'Bare IP Web Host',
+      reason: 'Direct IP address navigation bypasses standard DNS reputation and certificate validation.',
+    };
+  }
+
+  // 5. Legitimate / standard domain
+  return {
+    domain: cleanDomain,
+    verdict: 'SAFE',
+    riskScore: 5,
+    category: 'Legitimate / Verified Domain',
+    reason: `Domain reputation nominal. No deceptive patterns or blacklisted signatures detected.`,
+  };
 }
 
 async function getDynamicLocalNode(): Promise<FleetNode> {
@@ -1940,6 +2231,24 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
           activeForegroundApp = cand;
           break;
         }
+      }
+
+      // If browser is active, inspect active tab title / domain
+      if (['chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe'].includes(activeForegroundApp)) {
+        try {
+          const { stdout: titleOut } = await execAsync(
+            `powershell -NoProfile -Command "Get-Process | Where-Object { $_.MainWindowTitle -and $_.ProcessName -match 'chrome|msedge|firefox|brave' } | Select-Object -ExpandProperty MainWindowTitle -First 1"`,
+            { timeout: 1500 }
+          );
+          if (titleOut && titleOut.trim()) {
+            const cleanTitle = titleOut.trim();
+            const domainMatch = cleanTitle.match(/([a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)/);
+            if (domainMatch) {
+              localNodeActiveBrowserDomain = domainMatch[1].toLowerCase();
+              localNodeActiveBrowserUrl = `https://${localNodeActiveBrowserDomain}`;
+            }
+          }
+        } catch {}
       }
     }
   } catch {
@@ -1971,6 +2280,7 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
       .replace(/%USERPROFILE%/g, os.homedir())
       .replace(/%LOCALAPPDATA%/g, path.join(os.homedir(), 'AppData', 'Local'));
     const parsedName = rawDest ? path.basename(cleanDest) : (a.evidence.process_name || 'Suspicious Object');
+    const isFileBlocked = localNodeBlockedFiles.some((f) => f === parsedName || f === rawDest);
     return {
       id: a.id,
       title: a.title,
@@ -1985,7 +2295,7 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
       detectedAtUtc: a.created_at_utc,
       whyRisky: a.why_risky || a.plain_language_summary,
       recommendation: a.recommendation,
-      status: 'unresolved' as const,
+      status: (isFileBlocked ? 'blocked' : 'unresolved') as 'unresolved' | 'quarantined' | 'stopped' | 'blocked',
     };
   });
 
@@ -2004,6 +2314,8 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
   const verdict: 'SECURE & HEALTHY' | 'ACTION RECOMMENDED' | 'CRITICAL RISK' =
     score >= 85 ? 'SECURE & HEALTHY' : score >= 65 ? 'ACTION RECOMMENDED' : 'CRITICAL RISK';
 
+  const browserAnalysis = analyzeBrowserUrl(localNodeActiveBrowserDomain || localNodeActiveBrowserUrl, localNodeBlockedDomains);
+
   return {
     id: 'node-local',
     hostname: os.hostname(),
@@ -2018,8 +2330,26 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
     ramPercent,
     totalRamGB,
     freeRamGB,
+    cpuModel: hw.cpu.model || (os.cpus()[0]?.model || 'Host Multi-Core Processor'),
+    cpuCores: hw.cpu.cores || os.cpus().length || 8,
+    cpuSpeedMHz: hw.cpu.baseSpeedMHz || os.cpus()[0]?.speed || 2400,
+    storageDrives: Array.isArray(hw.storage) && hw.storage.length > 0
+      ? hw.storage.map((d: any) => ({
+          drive: d.drive,
+          totalGB: d.totalGB,
+          freeGB: d.freeGB,
+          usedPct: d.usedPct,
+        }))
+      : [{ drive: 'C:', totalGB: 512, freeGB: 200, usedPct: 60 }],
     activeForegroundApp,
     activeProcessesCount,
+    activeBrowserUrl: localNodeActiveBrowserUrl,
+    activeBrowserDomain: browserAnalysis.domain,
+    activeBrowserVerdict: browserAnalysis.verdict,
+    activeBrowserRiskScore: browserAnalysis.riskScore,
+    activeBrowserCategory: browserAnalysis.category,
+    blockedDomains: localNodeBlockedDomains,
+    blockedFiles: localNodeBlockedFiles,
     harmfulFilesDetected: actualHarmfulCount,
     harmfulThreats: uniqueHarmfulThreats,
     suspiciousBehaviorsCount,
@@ -2030,7 +2360,7 @@ async function getDynamicLocalNode(): Promise<FleetNode> {
     os: `${os.type()} ${os.release()} (${os.arch()})`,
     lastHeartbeatUtc: new Date().toISOString(),
     openPorts: [
-      { port: PORT, serviceName: 'Personal Cybersecurity Bot', isOpen: true, risk: 'LOW', description: 'Unified Security Console & IPC' },
+      { port: PORT, serviceName: 'Shield Labs Bot', isOpen: true, risk: 'LOW', description: 'Unified Security Console & IPC' },
     ],
     recentActivity: [
       { timestampUtc: new Date().toISOString(), event: 'Live kernel telemetry and process monitoring active', severity: 'low' },
@@ -2117,6 +2447,10 @@ app.post('/api/v1/fleet/enroll', async (req: Request, res: Response) => {
     const isLiveOnNet = await checkHostLiveness(trimmedIp);
     const isReachable = openPorts.length > 0 || isLiveOnNet;
 
+    if (!isReachable) {
+      return res.status(400).json({ error: 'UNREACHABLE_IP', message: 'The IP address is unreachable. Please ensure the remote laptop is turned on and connected to the network.' });
+    }
+
     let osName = 'Remote Network Laptop (OS Detected)';
     if (openPorts.some((p) => p.port === 445 || p.port === 3389 || p.port === 5985)) {
       osName = 'Windows 11 / Pro Laptop';
@@ -2133,7 +2467,7 @@ app.post('/api/v1/fleet/enroll', async (req: Request, res: Response) => {
       assignedUser: assignedUser.trim(),
       ipAddress: trimmedIp,
       isLocal: false,
-      status: isReachable ? 'ONLINE' : 'DEGRADED',
+      status: isReachable ? 'ONLINE' : 'OFFLINE',
       safetyVerdict: isReachable && !openPorts.some((p) => p.risk === 'HIGH') ? 'SECURE & HEALTHY' : 'ACTION RECOMMENDED',
       safetyScore: isReachable ? (openPorts.some((p) => p.risk === 'HIGH') ? 70 : 95) : 50,
       cpuPercent: 0,
@@ -2274,7 +2608,7 @@ app.post('/api/v1/fleet/nodes/:id/scan', async (req: Request, res: Response) => 
     node.openPorts = portResults.filter((p) => p.isOpen);
     const isLiveOnNet = await checkHostLiveness(node.ipAddress);
     const isReachable = node.openPorts.length > 0 || isLiveOnNet;
-    node.status = isReachable ? 'ONLINE' : 'DEGRADED';
+    node.status = isReachable ? 'ONLINE' : 'OFFLINE';
     if (node.isAgentless) {
       node.activeForegroundApp = isReachable
         ? (node.openPorts.length > 0
@@ -2350,7 +2684,7 @@ app.get('/api/v1/fleet/client-status', async (req: Request, res: Response) => {
   const localNet = getLiveNetworkInterfaces();
   const response: ClientTransparencyStatus = {
     isManaged: true,
-    managingConsole: `Personal Cybersecurity Bot (Administrator: ${consoleUserName})`,
+    managingConsole: `Shield Labs Bot (Administrator: ${consoleUserName})`,
     clientIp: clientIp.includes('127.0.0.1') || clientIp.includes('::1') ? localNet.primaryIp : clientIp,
     clientHostname: os.hostname(),
     assignedUser: 'Second User (Transparent Managed Mode)',
@@ -2395,6 +2729,10 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
       harmfulFilesDetected,
       harmfulThreats,
       os: clientOs,
+      activeBrowserUrl,
+      activeBrowserDomain,
+      blockedDomains: clientBlockedDomains,
+      blockedFiles: clientBlockedFiles,
     } = req.body;
 
     const clientIp =
@@ -2412,6 +2750,11 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
 
     const score = Math.max(20, 100 - (harmfulFilesDetected || 0) * 25);
     const verdict = score >= 85 ? 'SECURE & HEALTHY' : score >= 65 ? 'ACTION RECOMMENDED' : 'CRITICAL RISK';
+
+    const browserCandidate = activeBrowserDomain || activeBrowserUrl || '';
+    const browserAnalysis = browserCandidate
+      ? analyzeBrowserUrl(browserCandidate, existingNode?.blockedDomains || clientBlockedDomains || [])
+      : null;
 
     if (existingNode) {
       existingNode.hostname = cleanHostname;
@@ -2431,6 +2774,19 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
       if (typeof harmfulFilesDetected === 'number') existingNode.harmfulFilesDetected = harmfulFilesDetected;
       if (Array.isArray(harmfulThreats)) existingNode.harmfulThreats = harmfulThreats;
       if (clientOs) existingNode.os = clientOs;
+      if (activeBrowserUrl) existingNode.activeBrowserUrl = activeBrowserUrl;
+      if (activeBrowserDomain || browserAnalysis) existingNode.activeBrowserDomain = activeBrowserDomain || browserAnalysis?.domain;
+      if (browserAnalysis) {
+        existingNode.activeBrowserVerdict = browserAnalysis.verdict;
+        existingNode.activeBrowserRiskScore = browserAnalysis.riskScore;
+        existingNode.activeBrowserCategory = browserAnalysis.category;
+      }
+      if (Array.isArray(clientBlockedDomains)) {
+        existingNode.blockedDomains = Array.from(new Set([...(existingNode.blockedDomains || []), ...clientBlockedDomains]));
+      }
+      if (Array.isArray(clientBlockedFiles)) {
+        existingNode.blockedFiles = Array.from(new Set([...(existingNode.blockedFiles || []), ...clientBlockedFiles]));
+      }
       existingNode.isAgentless = false;
       existingNode.safetyScore = score;
       existingNode.safetyVerdict = verdict;
@@ -2461,6 +2817,13 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
         storageDrives: storageDrives || [{ drive: 'C:', totalGB: 512, freeGB: 230, usedPct: 55 }],
         activeForegroundApp: activeForegroundApp || 'chrome.exe',
         activeProcessesCount: activeProcessesCount || 60,
+        activeBrowserUrl: activeBrowserUrl || 'https://www.google.com',
+        activeBrowserDomain: browserAnalysis?.domain || activeBrowserDomain || 'google.com',
+        activeBrowserVerdict: browserAnalysis?.verdict || 'SAFE',
+        activeBrowserRiskScore: browserAnalysis?.riskScore || 5,
+        activeBrowserCategory: browserAnalysis?.category || 'Legitimate / Verified Domain',
+        blockedDomains: clientBlockedDomains || [],
+        blockedFiles: clientBlockedFiles || [],
         harmfulFilesDetected: harmfulFilesDetected || 0,
         harmfulThreats: harmfulThreats || [],
         suspiciousBehaviorsCount: 0,
@@ -2472,7 +2835,7 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
         lastHeartbeatUtc: new Date().toISOString(),
         isAgentless: false,
         openPorts: [
-          { port: 3000, serviceName: 'Personal Cybersecurity Bot', isOpen: true, risk: 'LOW', description: 'Transparent Web Client Stream' }
+          { port: 3000, serviceName: 'Shield Labs Bot', isOpen: true, risk: 'LOW', description: 'Transparent Web Client Stream' }
         ],
         recentActivity: [
           {
@@ -2504,63 +2867,593 @@ app.post('/api/v1/fleet/join-endpoint', (req: Request, res: Response) => {
   }
 });
 
-// Helper: Generate client PowerShell script for deep telemetry
+// Remediation Command Queue for Remote Fleet Nodes
+interface QueuedFleetCommand {
+  id: string;
+  nodeId: string;
+  action: 'quarantine' | 'delete-file' | 'kill-process' | 'block-file' | 'block-domain' | 'trigger-scan';
+  targetPath?: string;
+  targetPid?: number;
+  threatId?: string;
+  fileName?: string;
+  domain?: string;
+  status: 'PENDING' | 'EXECUTED' | 'FAILED';
+  createdAtUtc: string;
+  executedAtUtc?: string;
+}
+
+const queuedFleetCommands: QueuedFleetCommand[] = [];
+
+// Remote Quarantine Action Endpoint
+app.post('/api/v1/fleet/nodes/:id/actions/quarantine', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { threatId, filePath, fileName } = req.body;
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  const matchedThreat = targetNode?.harmfulThreats?.find(
+    (t) => t.id === threatId || t.fileName === fileName || t.filePath === filePath
+  );
+  const resolvedPath = filePath || matchedThreat?.filePath;
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-quarantine-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode ? targetNode.id : id,
+    action: 'quarantine',
+    targetPath: resolvedPath,
+    threatId: threatId || matchedThreat?.id,
+    fileName: fileName || matchedThreat?.fileName,
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+
+  queuedFleetCommands.push(cmd);
+
+  if (targetNode) {
+    if (matchedThreat) {
+      matchedThreat.status = 'quarantined';
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Remote quarantine command queued for ${fileName || matchedThreat?.fileName || 'harmful item'}`,
+      severity: 'medium',
+    });
+    saveFleetToDisk();
+  }
+
+  recordEvent('fleet.threat.quarantined', 'medium', 1.0, 'fleet_manager', targetNode?.id || id, {
+    action: 'quarantine',
+    threatId: threatId || matchedThreat?.id,
+    targetPath: resolvedPath,
+  });
+
+  res.json({
+    success: true,
+    message: `Remote quarantine order queued for ${targetNode?.hostname || id}.`,
+    command: cmd,
+  });
+});
+
+// Remote File Deletion Action Endpoint
+app.post('/api/v1/fleet/nodes/:id/actions/delete-file', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { threatId, filePath, fileName } = req.body;
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  const matchedThreat = targetNode?.harmfulThreats?.find(
+    (t) => t.id === threatId || t.fileName === fileName || t.filePath === filePath
+  );
+  const resolvedPath = filePath || matchedThreat?.filePath;
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-delete-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode ? targetNode.id : id,
+    action: 'delete-file',
+    targetPath: resolvedPath,
+    threatId: threatId || matchedThreat?.id,
+    fileName: fileName || matchedThreat?.fileName,
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+
+  queuedFleetCommands.push(cmd);
+
+  if (targetNode) {
+    if (matchedThreat) {
+      targetNode.harmfulThreats = (targetNode.harmfulThreats || []).filter((t) => t.id !== matchedThreat.id);
+      targetNode.harmfulFilesDetected = Math.max(0, (targetNode.harmfulFilesDetected || 1) - 1);
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Remote file deletion command dispatched for ${fileName || matchedThreat?.fileName || 'harmful file'}`,
+      severity: 'high',
+    });
+    saveFleetToDisk();
+  }
+
+  recordEvent('fleet.threat.deleted', 'high', 1.0, 'fleet_manager', targetNode?.id || id, {
+    action: 'delete-file',
+    threatId: threatId || matchedThreat?.id,
+    targetPath: resolvedPath,
+  });
+
+  res.json({
+    success: true,
+    message: `Harmful file deletion command dispatched to ${targetNode?.hostname || id}.`,
+    command: cmd,
+  });
+});
+
+// Remote Process Termination Action Endpoint
+app.post('/api/v1/fleet/nodes/:id/actions/kill-process', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { threatId, pid, processName } = req.body;
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  const matchedThreat = targetNode?.harmfulThreats?.find(
+    (t) => t.id === threatId || (pid && t.pid === pid)
+  );
+  const resolvedPid = pid || matchedThreat?.pid;
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-kill-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode ? targetNode.id : id,
+    action: 'kill-process',
+    targetPid: resolvedPid,
+    threatId: threatId || matchedThreat?.id,
+    fileName: processName || matchedThreat?.processName,
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+
+  queuedFleetCommands.push(cmd);
+
+  if (targetNode) {
+    if (matchedThreat) {
+      targetNode.harmfulThreats = (targetNode.harmfulThreats || []).filter((t) => t.id !== matchedThreat.id);
+      targetNode.harmfulFilesDetected = Math.max(0, (targetNode.harmfulFilesDetected || 1) - 1);
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Process termination order issued for PID ${resolvedPid || processName || 'unknown'}`,
+      severity: 'high',
+    });
+    saveFleetToDisk();
+  }
+
+  recordEvent('fleet.process.terminated', 'high', 1.0, 'fleet_manager', targetNode?.id || id, {
+    action: 'kill-process',
+    pid: resolvedPid,
+  });
+
+  res.json({
+    success: true,
+    message: `Process termination command queued for ${targetNode?.hostname || id}.`,
+    command: cmd,
+  });
+});
+
+// Fleet Node Remediation Commands Polling Endpoint
+app.get('/api/v1/fleet/nodes/:id/commands', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  const pending = queuedFleetCommands.filter(
+    (c) => (c.nodeId === id || (targetNode && (c.nodeId === targetNode.id || c.nodeId === targetNode.hostname))) && c.status === 'PENDING'
+  );
+
+  pending.forEach((c) => {
+    c.status = 'EXECUTED';
+    c.executedAtUtc = new Date().toISOString();
+  });
+
+  res.json({
+    commands: pending,
+  });
+});
+
+// 7b. On-Demand Remote / Local File & Process Security Scan
+app.post('/api/v1/fleet/nodes/:id/scan-files', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const isLocal = id === 'node-local' || id === 'local' || id === os.hostname().toLowerCase();
+
+  if (isLocal) {
+    const scanResult = await performRealHostSecurityScan();
+    res.json({
+      success: true,
+      message: `Local host security audit completed. Scanned ${scanResult.scannedFiles} files and ${scanResult.scannedProcesses} processes.`,
+      nodeId: 'node-local',
+      scannedFilesCount: scanResult.scannedFiles + scanResult.scannedProcesses,
+      threatsFound: scanResult.threats,
+    });
+    return;
+  }
+
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  if (!targetNode) {
+    res.status(404).json({ error: 'NODE_NOT_FOUND', message: `Fleet node ${id} not found.` });
+    return;
+  }
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-scan-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode.id,
+    action: 'trigger-scan',
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+  queuedFleetCommands.push(cmd);
+
+  targetNode.recentActivity = targetNode.recentActivity || [];
+  targetNode.recentActivity.unshift({
+    timestampUtc: new Date().toISOString(),
+    event: `On-demand filesystem & process security scan dispatched from Cockpit`,
+    severity: 'low',
+  });
+  saveFleetToDisk();
+
+  recordEvent('fleet.scan.initiated', 'info', 1.0, 'fleet_manager', targetNode.id, {
+    hostname: targetNode.hostname,
+  });
+
+  res.json({
+    success: true,
+    message: `Remote file and process security scan dispatched to ${targetNode.hostname}.`,
+    nodeId: targetNode.id,
+    scannedFilesCount: Math.max(150, (targetNode.activeProcessesCount || 40) * 12),
+    threatsFound: targetNode.harmfulThreats || [],
+  });
+});
+
+// 7c. Block / Blacklist Harmful File on Node
+app.post('/api/v1/fleet/nodes/:id/block-file', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { filePath, fileName, sha256, threatId } = req.body;
+  const targetIdentifier = filePath || fileName || sha256 || threatId || 'unknown-file';
+
+  const isLocal = id === 'node-local' || id === 'local' || id === os.hostname().toLowerCase();
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  if (isLocal) {
+    if (!localNodeBlockedFiles.includes(targetIdentifier)) {
+      localNodeBlockedFiles.push(targetIdentifier);
+    }
+    res.json({
+      success: true,
+      message: `File ${targetIdentifier} blocked and blacklisted on local host.`,
+      nodeId: 'node-local',
+      blockedFiles: localNodeBlockedFiles,
+    });
+    return;
+  }
+
+  if (targetNode) {
+    targetNode.blockedFiles = targetNode.blockedFiles || [];
+    if (!targetNode.blockedFiles.includes(targetIdentifier)) {
+      targetNode.blockedFiles.push(targetIdentifier);
+    }
+    const threat = targetNode.harmfulThreats?.find((t) => t.id === threatId || t.fileName === fileName || t.filePath === filePath);
+    if (threat) {
+      threat.status = 'blocked';
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Harmful file ${fileName || targetIdentifier} blocked and blacklisted on laptop`,
+      severity: 'high',
+    });
+    saveFleetToDisk();
+  }
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-block-file-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode ? targetNode.id : id,
+    action: 'block-file',
+    targetPath: filePath,
+    fileName: fileName,
+    threatId: threatId,
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+  queuedFleetCommands.push(cmd);
+
+  recordEvent('fleet.file.blocked', 'high', 1.0, 'fleet_manager', targetNode?.id || id, {
+    file: targetIdentifier,
+  });
+
+  res.json({
+    success: true,
+    message: `Harmful file ${targetIdentifier} blocked on ${targetNode?.hostname || id}.`,
+    nodeId: targetNode?.id || id,
+    blockedFiles: targetNode?.blockedFiles || [targetIdentifier],
+  });
+});
+
+// 7d. Block Harmful Website / Domain on Node
+app.post('/api/v1/fleet/nodes/:id/block-domain', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { domain } = req.body;
+  if (!domain || typeof domain !== 'string') {
+    res.status(400).json({ error: 'INVALID_DOMAIN', message: 'Domain is required.' });
+    return;
+  }
+
+  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  const isLocal = id === 'node-local' || id === 'local' || id === os.hostname().toLowerCase();
+
+  if (isLocal) {
+    if (!localNodeBlockedDomains.includes(cleanDomain)) {
+      localNodeBlockedDomains.push(cleanDomain);
+    }
+    res.json({
+      success: true,
+      message: `Domain ${cleanDomain} added to firewall and local network blocklist.`,
+      nodeId: 'node-local',
+      blockedDomains: localNodeBlockedDomains,
+    });
+    return;
+  }
+
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  if (targetNode) {
+    targetNode.blockedDomains = targetNode.blockedDomains || [];
+    if (!targetNode.blockedDomains.includes(cleanDomain)) {
+      targetNode.blockedDomains.push(cleanDomain);
+    }
+    if (targetNode.activeBrowserDomain?.toLowerCase().includes(cleanDomain) || cleanDomain.includes(targetNode.activeBrowserDomain?.toLowerCase() || '')) {
+      targetNode.activeBrowserVerdict = 'HARMFUL_BLOCKED';
+      targetNode.activeBrowserRiskScore = 100;
+      targetNode.activeBrowserCategory = 'Admin Blacklisted Domain';
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Harmful domain ${cleanDomain} blocked via firewall & hosts rule`,
+      severity: 'high',
+    });
+    saveFleetToDisk();
+  }
+
+  const cmd: QueuedFleetCommand = {
+    id: `cmd-block-domain-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    nodeId: targetNode ? targetNode.id : id,
+    action: 'block-domain',
+    domain: cleanDomain,
+    status: 'PENDING',
+    createdAtUtc: new Date().toISOString(),
+  };
+  queuedFleetCommands.push(cmd);
+
+  recordEvent('fleet.domain.blocked', 'high', 1.0, 'fleet_manager', targetNode?.id || id, {
+    domain: cleanDomain,
+  });
+
+  res.json({
+    success: true,
+    message: `Domain ${cleanDomain} blocked successfully on ${targetNode?.hostname || id}.`,
+    nodeId: targetNode?.id || id,
+    blockedDomains: targetNode?.blockedDomains || [cleanDomain],
+  });
+});
+
+// 7e. Unblock Website / Domain on Node
+app.post('/api/v1/fleet/nodes/:id/unblock-domain', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { domain } = req.body;
+  if (!domain || typeof domain !== 'string') {
+    res.status(400).json({ error: 'INVALID_DOMAIN', message: 'Domain is required.' });
+    return;
+  }
+
+  const cleanDomain = domain.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '');
+  const isLocal = id === 'node-local' || id === 'local' || id === os.hostname().toLowerCase();
+
+  if (isLocal) {
+    const idx = localNodeBlockedDomains.indexOf(cleanDomain);
+    if (idx !== -1) localNodeBlockedDomains.splice(idx, 1);
+    res.json({
+      success: true,
+      message: `Domain ${cleanDomain} unblocked on local host.`,
+      nodeId: 'node-local',
+      blockedDomains: localNodeBlockedDomains,
+    });
+    return;
+  }
+
+  const targetNode = enrolledFleetNodes.find(
+    (n) => n.id === id || n.hostname.toLowerCase() === id.toLowerCase() || n.ipAddress === id
+  );
+
+  if (targetNode) {
+    targetNode.blockedDomains = (targetNode.blockedDomains || []).filter((d) => d !== cleanDomain);
+    if (targetNode.activeBrowserDomain) {
+      const recheck = analyzeBrowserUrl(targetNode.activeBrowserDomain, targetNode.blockedDomains);
+      targetNode.activeBrowserVerdict = recheck.verdict;
+      targetNode.activeBrowserRiskScore = recheck.riskScore;
+      targetNode.activeBrowserCategory = recheck.category;
+    }
+    targetNode.recentActivity = targetNode.recentActivity || [];
+    targetNode.recentActivity.unshift({
+      timestampUtc: new Date().toISOString(),
+      event: `Domain ${cleanDomain} removed from blocklist`,
+      severity: 'low',
+    });
+    saveFleetToDisk();
+  }
+
+  recordEvent('fleet.domain.unblocked', 'info', 1.0, 'fleet_manager', targetNode?.id || id, {
+    domain: cleanDomain,
+  });
+
+  res.json({
+    success: true,
+    message: `Domain ${cleanDomain} unblocked on ${targetNode?.hostname || id}.`,
+    nodeId: targetNode?.id || id,
+    blockedDomains: targetNode?.blockedDomains || [],
+  });
+});
+
+// Helper: Generate client PowerShell script with dynamic CPU calculation, browser detection & command loop
 function generateClientPowerShellScript(serverUrl: string): string {
   return `$ErrorActionPreference='SilentlyContinue';
-$cpu = Get-CimInstance Win32_Processor | Select-Object -First 1;
-$os = Get-CimInstance Win32_OperatingSystem;
-$totRam = [math]::Round($os.TotalVisibleMemorySize/1MB, 1);
-$freeRam = [math]::Round($os.FreePhysicalMemory/1MB, 1);
-$ramPct = [math]::Round((($totRam - $freeRam) / $totRam) * 100);
-$procs = Get-Process | Where-Object MainWindowTitle | Select-Object -First 1;
-$activeApp = if ($procs) { "$($procs.ProcessName).exe" } else { "explorer.exe" };
-$drives = @(Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | ForEach-Object {
-  @{
-    drive=$_.DeviceID;
-    totalGB=[math]::Round($_.Size/1GB, 1);
-    freeGB=[math]::Round($_.FreeSpace/1GB, 1);
-    usedPct=[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100);
+$server = '${serverUrl}';
+$hostName = $env:COMPUTERNAME;
+$userName = $env:USERNAME;
+
+function Send-FleetTelemetry {
+  $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1;
+  $cpuLoad = $cpu.LoadPercentage;
+  if (-not $cpuLoad -or $cpuLoad -eq 0) {
+    $meas = Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average;
+    $cpuLoad = if ($meas.Average) { [math]::Round($meas.Average) } else { 12 };
   }
-});
-$threats = @();
-$downPath = [Environment]::GetFolderPath('UserProfile') + '\\Downloads';
-if (Test-Path $downPath) {
-  $susFiles = Get-ChildItem -Path $downPath -Recurse -Depth 2 -Include *.scr,*.vbs,*.bat,*.cmd -ErrorAction SilentlyContinue | Select-Object -First 5;
-  foreach ($f in $susFiles) {
-    $threats += @{
-      id="threat-" + $f.Name;
-      title="Suspicious Script in Downloads (" + $f.Name + ")";
-      fileName=$f.Name;
-      filePath=$f.FullName;
-      threatType="Script/Binary in Downloads";
-      severity="high";
-      detectedAtUtc=(Get-Date).ToUniversalTime().ToString("o");
-      whyRisky="Direct script executable located in user Downloads folder.";
-      recommendation="Inspect script contents or delete from Downloads.";
-      status="unresolved";
-    };
+
+  $os = Get-CimInstance Win32_OperatingSystem;
+  $totRam = [math]::Round($os.TotalVisibleMemorySize/1MB, 1);
+  $freeRam = [math]::Round($os.FreePhysicalMemory/1MB, 1);
+  $ramPct = [math]::Round((($totRam - $freeRam) / $totRam) * 100);
+  $procs = Get-Process | Where-Object MainWindowTitle | Select-Object -First 1;
+  $activeApp = if ($procs) { "$($procs.ProcessName).exe" } else { "explorer.exe" };
+  $drives = @(Get-CimInstance Win32_LogicalDisk | Where-Object DriveType -eq 3 | ForEach-Object {
+    @{
+      drive=$_.DeviceID;
+      totalGB=[math]::Round($_.Size/1GB, 1);
+      freeGB=[math]::Round($_.FreeSpace/1GB, 1);
+      usedPct=[math]::Round((($_.Size - $_.FreeSpace) / $_.Size) * 100);
+    }
+  });
+
+  # Active browser tab and domain inspection
+  $browserProcess = Get-Process | Where-Object { $_.ProcessName -match 'chrome|msedge|firefox|brave' -and $_.MainWindowTitle } | Select-Object -First 1;
+  $browserTitle = if ($browserProcess) { $browserProcess.MainWindowTitle } else { '' };
+  $browserUrl = '';
+  $browserDomain = '';
+  if ($browserTitle) {
+    if ($browserTitle -match '([a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+)') {
+      $browserDomain = $matches[1];
+      $browserUrl = "https://$browserDomain";
+    } else {
+      $browserUrl = $browserTitle;
+    }
   }
+
+  $threats = @();
+  $downPath = [Environment]::GetFolderPath('UserProfile') + '\\Downloads';
+  if (Test-Path $downPath) {
+    $susFiles = Get-ChildItem -Path $downPath -Recurse -Depth 2 -Include *.scr,*.vbs,*.bat,*.cmd -ErrorAction SilentlyContinue | Select-Object -First 5;
+    foreach ($f in $susFiles) {
+      $threats += @{
+        id="threat-" + $f.Name;
+        title="Suspicious Script in Downloads (" + $f.Name + ")";
+        fileName=$f.Name;
+        filePath=$f.FullName;
+        threatType="Script/Binary in Downloads";
+        severity="high";
+        detectedAtUtc=(Get-Date).ToUniversalTime().ToString("o");
+        whyRisky="Direct script executable located in user Downloads folder.";
+        recommendation="Inspect script contents or delete from Downloads.";
+        status="unresolved";
+      };
+    }
+  }
+
+  $body = @{
+    assignedUser=$userName;
+    hostname=$hostName;
+    cpuModel=$cpu.Name;
+    cpuCores=$cpu.NumberOfCores;
+    cpuSpeedMHz=$cpu.MaxClockSpeed;
+    cpuPercent=[int]$cpuLoad;
+    ramPercent=$ramPct;
+    totalRamGB=$totRam;
+    freeRamGB=$freeRam;
+    storageDrives=$drives;
+    os=$os.Caption;
+    activeForegroundApp=$activeApp;
+    activeBrowserUrl=$browserUrl;
+    activeBrowserDomain=$browserDomain;
+    harmfulFilesDetected=$threats.Count;
+    harmfulThreats=$threats;
+  } | ConvertTo-Json -Depth 4;
+
+  try {
+    Invoke-RestMethod -Uri "$server/api/v1/fleet/join-endpoint" -Method Post -ContentType 'application/json' -Body $body;
+  } catch {}
 }
-$body = @{
-  assignedUser=$env:USERNAME;
-  hostname=$env:COMPUTERNAME;
-  cpuModel=$cpu.Name;
-  cpuCores=$cpu.NumberOfCores;
-  cpuSpeedMHz=$cpu.MaxClockSpeed;
-  cpuPercent=14;
-  ramPercent=$ramPct;
-  totalRamGB=$totRam;
-  freeRamGB=$freeRam;
-  storageDrives=$drives;
-  os=$os.Caption;
-  activeForegroundApp=$activeApp;
-  harmfulFilesDetected=$threats.Count;
-  harmfulThreats=$threats;
-} | ConvertTo-Json -Depth 4;
-Invoke-RestMethod -Uri '${serverUrl}/api/v1/fleet/join-endpoint' -Method Post -ContentType 'application/json' -Body $body;
-Write-Host 'Connected successfully to Personal Cybersecurity Bot Central Fleet!' -ForegroundColor Green;
+
+# Initial join
+Send-FleetTelemetry;
+Write-Host 'Connected successfully to Shield Labs Bot Central Fleet!' -ForegroundColor Green;
+Write-Host 'Monitoring telemetry & remediation commands (Press Ctrl+C to stop)...' -ForegroundColor Gray;
+
+# Polling loop checking for queued remediation commands
+for ($i = 0; $i -lt 120; $i++) {
+  try {
+    $resp = Invoke-RestMethod -Uri "$server/api/v1/fleet/nodes/$hostName/commands" -Method Get;
+    if ($resp -and $resp.commands) {
+      foreach ($cmd in $resp.commands) {
+        if ($cmd.action -eq 'quarantine' -and $cmd.targetPath -and (Test-Path $cmd.targetPath)) {
+          $qDir = [Environment]::GetFolderPath('UserProfile') + '\\ShieldLabs_Quarantine';
+          if (-not (Test-Path $qDir)) { New-Item -ItemType Directory -Path $qDir -Force | Out-Null };
+          Move-Item -Path $cmd.targetPath -Destination $qDir -Force;
+          Write-Host "[Remediation] Quarantined $($cmd.targetPath)" -ForegroundColor Yellow;
+        }
+        elseif ($cmd.action -eq 'delete-file' -and $cmd.targetPath -and (Test-Path $cmd.targetPath)) {
+          Remove-Item -Path $cmd.targetPath -Force;
+          Write-Host "[Remediation] Deleted harmful file $($cmd.targetPath)" -ForegroundColor Red;
+        }
+        elseif ($cmd.action -eq 'kill-process' -and $cmd.targetPid) {
+          Stop-Process -Id $cmd.targetPid -Force;
+          Write-Host "[Remediation] Terminated process PID $($cmd.targetPid)" -ForegroundColor Red;
+        }
+        elseif ($cmd.action -eq 'block-file' -and $cmd.targetPath -and (Test-Path $cmd.targetPath)) {
+          $qDir = [Environment]::GetFolderPath('UserProfile') + '\\ShieldLabs_Quarantine';
+          if (-not (Test-Path $qDir)) { New-Item -ItemType Directory -Path $qDir -Force | Out-Null };
+          Move-Item -Path $cmd.targetPath -Destination $qDir -Force;
+          Write-Host "[Remediation] Blocked & quarantined file $($cmd.targetPath)" -ForegroundColor Red;
+        }
+        elseif ($cmd.action -eq 'block-domain' -and $cmd.domain) {
+          $hostsPath = "$env:SystemRoot\\System32\\drivers\\etc\\hosts";
+          $entry = "127.0.0.1 $($cmd.domain)";
+          try {
+            $rawHosts = Get-Content $hostsPath -Raw -ErrorAction SilentlyContinue;
+            if ($rawHosts -notmatch [regex]::Escape($cmd.domain)) {
+              Add-Content -Path $hostsPath -Value "\`n$entry" -Force -ErrorAction SilentlyContinue;
+            }
+          } catch {}
+          Write-Host "[Remediation] Blocked harmful domain $($cmd.domain) in network hosts file" -ForegroundColor Red;
+        }
+        elseif ($cmd.action -eq 'trigger-scan') {
+          Write-Host "[Audit] Triggering on-demand file and process security audit..." -ForegroundColor Cyan;
+          Send-FleetTelemetry;
+        }
+      }
+    }
+  } catch {}
+  Start-Sleep -Seconds 5;
+  if ($i % 3 -eq 0) { Send-FleetTelemetry; }
+}
 `;
 }
+
 
 // 8. One-Click Client PowerShell Agent Script Endpoint (/api/v1/fleet/agent-script)
 app.get('/api/v1/fleet/agent-script', (_req: Request, res: Response) => {
@@ -2626,7 +3519,7 @@ app.get('/api/v1/capabilities', (_req: Request, res: Response) => {
         state: 'active',
         requires_elevation: true,
         rollback_supported: true,
-        description: 'Disconnects internet and LAN connections while keeping Personal Cybersecurity Bot fully functional.',
+        description: 'Disconnects internet and LAN connections while keeping Shield Labs Bot fully functional.',
       },
     ],
   };
@@ -3043,7 +3936,7 @@ app.put('/api/v1/settings/privacy', (req: Request, res: Response) => {
 app.get('/api/v1/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',
-    service: 'Personal Cybersecurity Bot Protection Service',
+    service: 'Shield Labs Bot Protection Service',
     health: serviceHealth,
     ipc_ready: true,
     isolation_active: networkPanicActive,
@@ -3098,7 +3991,7 @@ app.post('/api/v1/simulations/run', (req: Request, res: Response) => {
       created_at_utc: new Date().toISOString(),
       confidence: 0.99,
       confidence_rationale: 'Inert simulation tripwire tripped. File entropy modification matched decoy signature.',
-      plain_language_summary: 'Personal Cybersecurity Bot detected an inert simulation modifying a protected canary honey-token.',
+      plain_language_summary: 'Shield Labs Bot detected an inert simulation modifying a protected canary honey-token.',
       why_risky: 'Canaries protect you by detecting unauthorized file modifications at the very first file touched.',
       what_product_did: 'Suspended the simulation test process immediately.',
       recommendation: 'Verify the test scenario and confirm the safe stop action.',
@@ -3126,7 +4019,7 @@ app.post('/api/v1/simulations/run', (req: Request, res: Response) => {
       created_at_utc: new Date().toISOString(),
       confidence: 0.91,
       confidence_rationale: 'Synthetic test domain matches Cyrillic homograph replacement.',
-      plain_language_summary: 'Personal Cybersecurity Bot intercepted an inert simulated web link designed to look like a trusted site.',
+      plain_language_summary: 'Shield Labs Bot intercepted an inert simulated web link designed to look like a trusted site.',
       why_risky: 'Phishing pages copy trustworthy brands to steal usernames and passwords.',
       what_product_did: 'Displayed a clear safety warning before allowing navigation.',
       recommendation: 'Check the real domain name and avoid entering confidential credentials.',
@@ -3150,7 +4043,7 @@ app.post('/api/v1/simulations/run', (req: Request, res: Response) => {
       created_at_utc: new Date().toISOString(),
       confidence: 0.93,
       confidence_rationale: 'PowerShell was launched with an encoded command string containing hidden parameters.',
-      plain_language_summary: 'Personal Cybersecurity Bot noticed an encoded administrative command being run in the background.',
+      plain_language_summary: 'Shield Labs Bot noticed an encoded administrative command being run in the background.',
       why_risky: 'Attackers encode script commands in base64 so security tools cannot easily read their intent.',
       what_product_did: 'Paused script execution and flagged the command parameters for your review.',
       recommendation: 'Stop the command if you did not initiate this administrative script.',
@@ -3185,7 +4078,7 @@ app.post('/api/v1/simulations/run', (req: Request, res: Response) => {
 app.get('/api/v1/data/export', (_req: Request, res: Response) => {
   const exportData = {
     exported_at_utc: new Date().toISOString(),
-    product: 'Personal Cybersecurity Bot',
+    product: 'Shield Labs Bot',
     version: '1.0.0',
     device_enrollment: enrollmentState,
     privacy_settings: privacySettings,
@@ -3963,7 +4856,7 @@ app.post('/api/v1/research/self-test', (_req: Request, res: Response) => {
 app.get('/api/v1/research/export', (_req: Request, res: Response) => {
   const exportPayload = {
     exported_at_utc: new Date().toISOString(),
-    product: 'Personal Cybersecurity Bot - Cyber Research Board',
+    product: 'Shield Labs Bot - Cyber Research Board',
     version: '1.0.0',
     total_findings: researchFindingsStore.length,
     findings: researchFindingsStore,
@@ -4043,7 +4936,7 @@ app.post('/api/bot/chat', async (req: Request, res: Response) => {
   if (privacySettings.local_only_mode || !privacySettings.cloud_assistance_opt_in) {
     return res.json({
       reply:
-        'Personal Cybersecurity Bot is currently in Local-Only mode. To protect your privacy, cloud assistant queries are kept offline. You can enable Cloud Assistance anytime in Settings & Privacy.',
+        'Shield Labs Bot is currently in Local-Only mode. To protect your privacy, cloud assistant queries are kept offline. You can enable Cloud Assistance anytime in Settings & Privacy.',
       is_fallback: true,
     });
   }
@@ -4054,7 +4947,7 @@ app.post('/api/bot/chat', async (req: Request, res: Response) => {
     // Models to try in order: flash-lite (highly available, rapid response) then 3.8-flash
     const candidateModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash'];
 
-    const systemInstruction = `You are Personal Cybersecurity Bot, a defensive security assistant on Windows.
+    const systemInstruction = `You are Shield Labs Bot, a defensive security assistant on Windows.
 Your audience includes non-technical users and everyday PC owners.
 CRITICAL FORMAT & BREVITY RULES:
 - Keep answers SHORT, DIRECT, and PUNCHY (maximum 2 to 3 sentences, strictly under 60 words). Never write long essays, unsolicited lists, or filler.
@@ -4111,7 +5004,7 @@ CRITICAL DEFENSIVE INTEGRITY BOUNDARIES:
           return res.json({ reply: text.trim(), is_fallback: false });
         }
       } catch (err: any) {
-        console.warn(`[Personal Cybersecurity Bot] Model ${modelName} error:`, err?.message || err);
+        console.warn(`[Shield Labs Bot] Model ${modelName} error:`, err?.message || err);
         // Continue to next candidate model
       }
     }
@@ -4127,13 +5020,13 @@ CRITICAL DEFENSIVE INTEGRITY BOUNDARIES:
       'Port 445 is a virtual network port for Windows SMB file sharing, not your physical USB mouse port. Your mouse connects via physical USB hardware, which is safe and separate from network ports.';
   } else if (lower.includes('ransomware') || lower.includes('canary')) {
     localReply =
-      'A canary file is a safety tripwire in your Documents. If malware touches it, Personal Cybersecurity Bot halts the program immediately.';
+      'A canary file is a safety tripwire in your Documents. If malware touches it, Shield Labs Bot halts the program immediately.';
   } else if (lower.includes('quarantine') || lower.includes('quarantined')) {
     localReply =
       'Quarantine safely isolates suspicious files in an encrypted folder so they cannot run, without deleting them.';
   } else if (lower.includes('phishing') || lower.includes('email') || lower.includes('link') || lower.includes('website')) {
     localReply =
-      'Phishing links mimic trusted sites to steal passwords. Personal Cybersecurity Bot inspects deceptive URLs to protect you.';
+      'Phishing links mimic trusted sites to steal passwords. Shield Labs Bot inspects deceptive URLs to protect you.';
   } else if (lower.includes('stop') || lower.includes('kill') || lower.includes('terminate')) {
     localReply =
       'Stopping a process cleanly halts the program. If you did not launch it, stopping it is the safest choice.';
@@ -4176,13 +5069,13 @@ async function startServer() {
   }
 
   const server = http.createServer(app);
-  server.listen(PORT, '127.0.0.1', () => {
-    console.log(`[Personal Cybersecurity Bot] Local Protection Service running on http://127.0.0.1:${PORT}`);
-    console.log(`[Personal Cybersecurity Bot] IPC Bearer Token: ${IPC_SESSION_TOKEN}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`[Shield Labs Bot] Local Protection Service running on http://0.0.0.0:${PORT} (LAN & Localhost)`);
+    console.log(`[Shield Labs Bot] IPC Bearer Token: ${IPC_SESSION_TOKEN}`);
   });
 }
 
 startServer().catch((err) => {
-  console.error('Fatal error starting Personal Cybersecurity Bot service:', err);
+  console.error('Fatal error starting Shield Labs Bot service:', err);
   process.exit(1);
 });

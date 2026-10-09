@@ -1,5 +1,5 @@
 /**
- * Personal Cybersecurity Bot - Main Application Shell
+ * Shield Labs Bot - Main Application Shell
  * Desktop-first, calm security console with light theme & device-owner authentication
  */
 

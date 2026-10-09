@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Personal Cybersecurity Bot - Unified Web Security & Fleet Platform Launcher
+    Shield Labs Bot - Unified Web Security & Fleet Platform Launcher
 .DESCRIPTION
     Launches the Unified Web Security & Fleet Platform on http://127.0.0.1:3000.
 .PARAMETER Component
@@ -13,7 +13,7 @@ param (
 )
 
 Write-Host "====================================================================" -ForegroundColor Cyan
-Write-Host "  Personal Cybersecurity Bot - Unified Web Security & Fleet Platform" -ForegroundColor Cyan
+Write-Host "  Shield Labs Bot - Unified Web Security & Fleet Platform" -ForegroundColor Cyan
 Write-Host "====================================================================" -ForegroundColor Cyan
 Write-Host ""
 

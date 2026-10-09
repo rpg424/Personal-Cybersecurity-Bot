@@ -1,4 +1,4 @@
-# Personal Cybersecurity Bot & Multi-Node Fleet Manager
+# Shield Labs Bot & Multi-Node Fleet Manager
 
 Defensive, privacy-first desktop cybersecurity console and unified multi-node fleet management platform on Windows.
 

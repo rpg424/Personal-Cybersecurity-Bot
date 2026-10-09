@@ -159,7 +159,7 @@ export const GuidedResponseWizard: React.FC<GuidedResponseWizardProps> = ({
                   <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <span>
-                      Personal Cybersecurity Bot never deletes your files outright. Quarantined files are encrypted in your local vault and can be reviewed or restored anytime.
+                      Shield Labs Bot never deletes your files outright. Quarantined files are encrypted in your local vault and can be reviewed or restored anytime.
                     </span>
                   </div>
                 </div>

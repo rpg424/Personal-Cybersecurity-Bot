@@ -23,7 +23,7 @@ export const AssistantChatDrawer: React.FC<AssistantChatDrawerProps> = ({
   const [messages, setMessages] = useState<Message[]>([
     {
       sender: 'bot',
-      text: 'Hello! I am your Personal Cybersecurity Bot assistant. How can I help you understand your PC security today? Feel free to ask about any alert, download, or setting.',
+      text: 'Hello! I am your Shield Labs Bot assistant. How can I help you understand your PC security today? Feel free to ask about any alert, download, or setting.',
     },
   ]);
   const [inputText, setInputText] = useState('');
@@ -88,7 +88,7 @@ export const AssistantChatDrawer: React.FC<AssistantChatDrawerProps> = ({
   return (
     <div
       role="dialog"
-      aria-label="Personal Cybersecurity Bot Assistant"
+      aria-label="Shield Labs Bot Assistant"
       className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
     >
       {/* Drawer Header */}

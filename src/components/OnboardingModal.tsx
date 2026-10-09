@@ -48,7 +48,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComp
           </div>
           <div>
             <h1 id="onboarding-title" className="text-lg font-bold text-slate-900 tracking-tight">
-              Welcome to Personal Cybersecurity Bot
+              Welcome to Shield Labs Bot
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               Calm, defensive protection designed for your Windows desktop.
@@ -157,7 +157,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComp
                 className="w-4 h-4 accent-emerald-600 rounded mt-0.5 cursor-pointer"
               />
               <span className="text-slate-700 leading-relaxed text-xs">
-                I understand the defensive boundaries and authorize Personal Cybersecurity Bot to monitor my local processes, downloads, and decoy canary files.
+                I understand the defensive boundaries and authorize Shield Labs Bot to monitor my local processes, downloads, and decoy canary files.
               </span>
             </label>
           </div>

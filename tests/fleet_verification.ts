@@ -171,7 +171,7 @@ console.log('✔ Test 4 Passed: Client telemetry heartbeat synchronizes without 
 // Test 5: Client Transparency Status & Privacy Boundary Verification
 const clientStatus: ClientTransparencyStatus = {
   isManaged: true,
-  managingConsole: 'Personal Cybersecurity Bot (Administrator: Device Owner)',
+  managingConsole: 'Shield Labs Bot (Administrator: Device Owner)',
   clientIp: '192.168.29.105',
   clientHostname: 'THINKPAD-REMOTE-01',
   assignedUser: 'Second User (Alice)',
@@ -211,7 +211,7 @@ const KNOWN_PORTS_TEST_CATALOG: Record<number, { serviceName: string; risk: 'LOW
   80: { serviceName: 'HTTP (Hypertext Transfer Protocol)', risk: 'MEDIUM', description: 'World Wide Web server daemon' },
   443: { serviceName: 'HTTPS (HTTP over TLS/SSL)', risk: 'LOW', description: 'Encrypted secure web communication' },
   445: { serviceName: 'SMB (Server Message Block / NetBIOS)', risk: 'HIGH', description: 'Windows file sharing protocol' },
-  3000: { serviceName: 'Personal Cybersecurity Bot (Fleet Console API)', risk: 'LOW', description: 'Antigravity centralized security management node' },
+  3000: { serviceName: 'Shield Labs Bot (Fleet Console API)', risk: 'LOW', description: 'Antigravity centralized security management node' },
   3389: { serviceName: 'RDP (Remote Desktop Protocol)', risk: 'HIGH', description: 'Microsoft Windows Graphical Remote Desktop' },
 };
 

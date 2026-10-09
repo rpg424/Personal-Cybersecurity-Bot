@@ -15,11 +15,29 @@ import {
   Lock,
   Eye,
   ShieldAlert,
+  Globe,
+  Ban,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { SecondUserJoinPayload, FleetNode } from '../types/security';
 
+function extractDomain(urlStr: string): string {
+  try {
+    const parsed = new URL(urlStr.startsWith('http') ? urlStr : `https://${urlStr}`);
+    return parsed.hostname.toLowerCase();
+  } catch {
+    return urlStr.trim().toLowerCase();
+  }
+}
+
 export const SecondUserJoinView: React.FC = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [assignedUser, setAssignedUser] = useState('Second User (Laptop)');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [joinedNode, setJoinedNode] = useState<FleetNode | null>(null);
@@ -27,6 +45,10 @@ export const SecondUserJoinView: React.FC = () => {
   const [agentScript, setAgentScript] = useState<string>('');
   const [copiedScript, setCopiedScript] = useState(false);
   const [heartbeatCount, setHeartbeatCount] = useState(0);
+
+  // Active simulated/monitored browser URL state
+  const [testBrowserUrl, setTestBrowserUrl] = useState('https://github.com/login');
+  const [isSendingUrl, setIsSendingUrl] = useState(false);
 
   // Hardware concurrency and platform detection from browser
   const cpuCores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
@@ -55,6 +77,7 @@ export const SecondUserJoinView: React.FC = () => {
     setErrorMessage(null);
 
     try {
+      const domain = extractDomain(testBrowserUrl);
       const payload: SecondUserJoinPayload = {
         assignedUser: assignedUser.trim() || 'Second User (Laptop)',
         hostname: `${detectedOs.split(' ')[0].toUpperCase()}-CLIENT-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -69,8 +92,10 @@ export const SecondUserJoinView: React.FC = () => {
         storageDrives: [
           { drive: 'C:', totalGB: 512, freeGB: 280, usedPct: 45 },
         ],
-        activeForegroundApp: 'Browser (Security Portal)',
+        activeForegroundApp: 'Google Chrome',
         activeProcessesCount: 42,
+        activeBrowserUrl: testBrowserUrl,
+        activeBrowserDomain: domain,
         harmfulFilesDetected: 0,
         harmfulThreats: [],
       };
@@ -88,22 +113,146 @@ export const SecondUserJoinView: React.FC = () => {
     }
   };
 
+  const handleReportBrowserUrl = async (urlToReport?: string) => {
+    if (!joinedNode) return;
+    const targetUrl = urlToReport || testBrowserUrl;
+    const domain = extractDomain(targetUrl);
+    setIsSendingUrl(true);
+    try {
+      const res = await api.joinFleetEndpoint({
+        assignedUser,
+        hostname: joinedNode.hostname,
+        os: joinedNode.os,
+        cpuModel: joinedNode.cpuModel,
+        cpuCores: joinedNode.cpuCores,
+        cpuSpeedMHz: joinedNode.cpuSpeedMHz,
+        cpuPercent: joinedNode.cpuPercent,
+        ramPercent: joinedNode.ramPercent,
+        totalRamGB: joinedNode.totalRamGB,
+        freeRamGB: joinedNode.freeRamGB,
+        storageDrives: joinedNode.storageDrives,
+        activeForegroundApp: 'Google Chrome',
+        activeProcessesCount: joinedNode.activeProcessesCount,
+        activeBrowserUrl: targetUrl,
+        activeBrowserDomain: domain,
+        harmfulFilesDetected: joinedNode.harmfulFilesDetected,
+        harmfulThreats: joinedNode.harmfulThreats,
+      });
+      if (res && res.node) {
+        setJoinedNode(res.node);
+      }
+    } catch (err) {
+      console.error('Failed to report browser URL:', err);
+    } finally {
+      setIsSendingUrl(false);
+    }
+  };
+
   // Keep sending periodic heartbeat if joined
   useEffect(() => {
     if (!joinedNode) return;
 
     const interval = setInterval(() => {
       setHeartbeatCount((c) => c + 1);
+      const domain = extractDomain(testBrowserUrl);
+      // Push live update to Supabase via our client API
+      api.joinFleetEndpoint({
+        assignedUser,
+        hostname: joinedNode.hostname,
+        os: joinedNode.os,
+        cpuModel: joinedNode.cpuModel || '',
+        cpuCores: joinedNode.cpuCores || 4,
+        cpuSpeedMHz: joinedNode.cpuSpeedMHz || 2400,
+        cpuPercent: Math.floor(Math.random() * 30) + 10, // Simulated live fluctuation
+        ramPercent: Math.floor(Math.random() * 20) + 40,
+        totalRamGB: joinedNode.totalRamGB || 16,
+        freeRamGB: joinedNode.freeRamGB || 8,
+        storageDrives: joinedNode.storageDrives || [],
+        activeForegroundApp: 'Google Chrome',
+        activeProcessesCount: joinedNode.activeProcessesCount || 42,
+        activeBrowserUrl: testBrowserUrl,
+        activeBrowserDomain: domain,
+        harmfulFilesDetected: joinedNode.harmfulFilesDetected || 0,
+        harmfulThreats: joinedNode.harmfulThreats || [],
+      }).then((res) => {
+        if (res && res.node) {
+          setJoinedNode(res.node);
+        }
+      }).catch(console.error);
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [joinedNode]);
+  }, [joinedNode, assignedUser, testBrowserUrl]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedScript(true);
     setTimeout(() => setCopiedScript(false), 2500);
   };
+
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginUser.trim().length > 0 && loginPass.trim().length > 0) {
+      setAssignedUser(loginUser.trim());
+      setIsAuthenticated(true);
+      setLoginError('');
+    } else {
+      setLoginError('Please enter a valid username and password.');
+    }
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-sm w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-xl">
+          <div className="text-center space-y-2 mb-6">
+            <div className="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900">Device User Login</h2>
+            <p className="text-xs text-slate-500">Please authenticate to join the fleet.</p>
+          </div>
+          <form onSubmit={handleLoginSubmit} className="space-y-4">
+            {loginError && (
+              <div className="text-xs text-rose-600 bg-rose-50 p-2 rounded border border-rose-200 flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {loginError}
+              </div>
+            )}
+            <div>
+              <label htmlFor="join-username" className="block text-xs font-semibold text-slate-700 mb-1">Username / Identifier</label>
+              <input
+                id="join-username"
+                name="username"
+                type="text"
+                autoComplete="username"
+                value={loginUser}
+                onChange={(e) => setLoginUser(e.target.value)}
+                className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="e.g. John Doe"
+              />
+            </div>
+            <div>
+              <label htmlFor="join-password" className="block text-xs font-semibold text-slate-700 mb-1">Access Code / Password</label>
+              <input
+                id="join-password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+                className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Enter password"
+              />
+            </div>
+            <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm">
+              Authenticate & Continue
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between p-4 sm:p-6 lg:p-8 font-sans">
@@ -120,7 +269,7 @@ export const SecondUserJoinView: React.FC = () => {
                   Endpoint Pairing & Telemetry Portal
                 </h1>
                 <p className="text-xs text-slate-500">
-                  Personal Cybersecurity Bot · Monitored Laptop Client Link
+                  Shield Labs Bot · Monitored Laptop Client Link
                 </p>
               </div>
             </div>
@@ -349,6 +498,160 @@ export const SecondUserJoinView: React.FC = () => {
               </div>
             </div>
 
+            {/* Live Visited Website & Active Browser Threat Monitor */}
+            <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3.5 text-xs shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md border border-blue-200">
+                    <Globe className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">Active Browser & Visited Site Protection</h4>
+                    <p className="text-[11px] text-slate-500">Foreground App: {joinedNode.activeForegroundApp || 'Google Chrome'}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {(joinedNode.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (joinedNode.blockedDomains && joinedNode.blockedDomains.includes(extractDomain(testBrowserUrl)))) ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 animate-pulse">
+                      <Ban className="w-3 h-3 text-rose-600" />
+                      BLOCKED BY ADMIN
+                    </span>
+                  ) : joinedNode.activeBrowserVerdict === 'SUSPICIOUS' ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                      SUSPICIOUS SITE ({joinedNode.activeBrowserRiskScore || 70}/100)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                      SAFE WEB RESOURCE
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* High-visibility Administrator Block Warning */}
+              {(joinedNode.activeBrowserVerdict === 'HARMFUL_BLOCKED' || (joinedNode.blockedDomains && joinedNode.blockedDomains.includes(extractDomain(testBrowserUrl)))) && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-xs text-rose-700">
+                    <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                    ACCESS TERMINATED: Website Blocked by Central Security Administrator
+                  </div>
+                  <p className="text-[11px] text-rose-800 leading-relaxed">
+                    The domain <strong className="font-mono">{joinedNode.activeBrowserDomain || extractDomain(testBrowserUrl)}</strong> is on the organization's blacklist. 
+                    Network requests are blocked at the host level.
+                  </p>
+                </div>
+              )}
+
+              {/* Visited URL Simulator / Tester */}
+              <div className="space-y-2 pt-1">
+                <label className="block text-[11px] font-semibold text-slate-700">
+                  Simulated or Active Visited Website URL:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={testBrowserUrl}
+                    onChange={(e) => setTestBrowserUrl(e.target.value)}
+                    placeholder="https://example.com"
+                    className="flex-1 text-xs px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-mono focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleReportBrowserUrl()}
+                    disabled={isSendingUrl}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg text-xs transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {isSendingUrl ? 'Testing...' : 'Report URL'}
+                  </button>
+                </div>
+
+                {/* Preset quick test buttons */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[10px] text-slate-500 font-medium">Test Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestBrowserUrl('https://github.com/login');
+                      handleReportBrowserUrl('https://github.com/login');
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-mono border border-slate-200"
+                  >
+                    github.com (Safe)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestBrowserUrl('https://paypal-verify.cc/login');
+                      handleReportBrowserUrl('https://paypal-verify.cc/login');
+                    }}
+                    className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded text-[10px] font-mono border border-rose-200"
+                  >
+                    paypal-verify.cc (Phishing)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestBrowserUrl('https://crypto-airdrop.xyz');
+                      handleReportBrowserUrl('https://crypto-airdrop.xyz');
+                    }}
+                    className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded text-[10px] font-mono border border-amber-200"
+                  >
+                    crypto-airdrop.xyz (Suspicious)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTestBrowserUrl('http://185.220.101.5:8080');
+                      handleReportBrowserUrl('http://185.220.101.5:8080');
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[10px] font-mono border border-slate-200"
+                  >
+                    185.220.101.5 (Raw IP)
+                  </button>
+                </div>
+              </div>
+
+              {/* Blocked Policies currently enforced on this laptop */}
+              <div className="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="font-semibold text-slate-700 block mb-1">
+                    🛑 Enforced Blocked Domains ({joinedNode.blockedDomains?.length || 0}):
+                  </span>
+                  {joinedNode.blockedDomains && joinedNode.blockedDomains.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {joinedNode.blockedDomains.map((dom) => (
+                        <span key={dom} className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-mono text-[10px]">
+                          {dom}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic">No domain blacklists currently enforced</span>
+                  )}
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                  <span className="font-semibold text-slate-700 block mb-1">
+                    🛡️ Enforced Blocked Files ({joinedNode.blockedFiles?.length || 0}):
+                  </span>
+                  {joinedNode.blockedFiles && joinedNode.blockedFiles.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {joinedNode.blockedFiles.map((f) => (
+                        <span key={f} className="px-1.5 py-0.5 bg-rose-100 text-rose-800 rounded font-mono text-[10px] truncate max-w-[140px]" title={f}>
+                          {f}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-slate-400 italic">No file blacklists currently enforced</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2">
               <span className="text-xs text-slate-500">
                 You can keep this browser tab open to maintain continuous telemetry reporting.
@@ -376,7 +679,7 @@ export const SecondUserJoinView: React.FC = () => {
       </div>
 
       <footer className="mt-8 text-center text-[11px] text-slate-400">
-        Personal Cybersecurity Bot · Enterprise-Grade Multi-Node Fleet Telemetry · Zero Covert Surveillance
+        Shield Labs Bot · Enterprise-Grade Multi-Node Fleet Telemetry · Zero Covert Surveillance
       </footer>
     </div>
   );

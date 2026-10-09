@@ -1,5 +1,5 @@
 /**
- * Personal Cybersecurity Bot - Shared Types & Contracts
+ * Shield Labs Bot - Shared Types & Contracts
  * Compliant with API and Event Specification v1.0.0
  */
 
@@ -472,7 +472,7 @@ export interface HarmfulThreatDetail {
   detectedAtUtc: string;
   whyRisky: string;
   recommendation: string;
-  status: 'unresolved' | 'quarantined' | 'stopped';
+  status: 'unresolved' | 'quarantined' | 'stopped' | 'blocked';
 }
 
 export interface FleetNode {
@@ -507,6 +507,13 @@ export interface FleetNode {
   isAgentless?: boolean;
   openPorts?: RemoteServicePort[];
   recentActivity?: Array<{ timestampUtc: string; event: string; severity: 'low' | 'medium' | 'high' }>;
+  activeBrowserUrl?: string;
+  activeBrowserDomain?: string;
+  activeBrowserVerdict?: 'SAFE' | 'SUSPICIOUS' | 'HARMFUL_BLOCKED';
+  activeBrowserRiskScore?: number;
+  activeBrowserCategory?: string;
+  blockedDomains?: string[];
+  blockedFiles?: string[];
 }
 
 export interface SecondUserJoinPayload {
@@ -525,6 +532,31 @@ export interface SecondUserJoinPayload {
   harmfulFilesDetected?: number;
   harmfulThreats?: HarmfulThreatDetail[];
   os?: string;
+  activeBrowserUrl?: string;
+  activeBrowserDomain?: string;
+  activeBrowserVerdict?: 'SAFE' | 'SUSPICIOUS' | 'HARMFUL_BLOCKED';
+  activeBrowserRiskScore?: number;
+  activeBrowserCategory?: string;
+}
+
+export interface BlockDomainRequest {
+  domain: string;
+  reason?: string;
+}
+
+export interface BlockDomainResponse {
+  success: boolean;
+  message: string;
+  nodeId: string;
+  blockedDomains: string[];
+}
+
+export interface TriggerFileScanResponse {
+  success: boolean;
+  message: string;
+  nodeId: string;
+  scannedFilesCount: number;
+  threatsFound: HarmfulThreatDetail[];
 }
 
 export interface FleetSummary {
@@ -559,5 +591,28 @@ export interface ClientTransparencyStatus {
   lastHeartbeatUtc: string;
 }
 
+export type UserRole = 'ADMIN' | 'SECURITY_ANALYST' | 'AUDITOR';
 
+export interface UserProfile {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+  avatarUrl?: string;
+  deviceName?: string;
+  createdAtUtc?: string;
+  lastLoginUtc?: string;
+}
 
+export interface NodeRemediationCommand {
+  id: string;
+  nodeId: string;
+  action: 'quarantine' | 'delete-file' | 'kill-process';
+  targetPath?: string;
+  targetPid?: number;
+  threatId?: string;
+  fileName?: string;
+  status: 'PENDING' | 'EXECUTED' | 'FAILED';
+  createdAtUtc: string;
+  executedAtUtc?: string;
+}

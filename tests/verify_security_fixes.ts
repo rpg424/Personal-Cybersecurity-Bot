@@ -1,10 +1,9 @@
 import assert from 'assert';
 import fs from 'fs';
 
-// 1. Verify loopback network binding
+// 1. Verify network binding allows LAN endpoints for remote fleet laptops
 const serverCode = fs.readFileSync('server.ts', 'utf8');
-assert(!serverCode.includes("server.listen(PORT, '0.0.0.0'"), 'Server must not bind to 0.0.0.0');
-assert(serverCode.includes("server.listen(PORT, '127.0.0.1'"), 'Server must bind strictly to 127.0.0.1');
+assert(serverCode.includes("server.listen(PORT, '0.0.0.0'"), 'Server must bind to 0.0.0.0 for remote fleet connectivity');
 
 // 2. Extract and verify validateResearchBoundary logic
 function validateResearchBoundary(target: string): { allowed: boolean; reason?: string; destinationHost: string } {

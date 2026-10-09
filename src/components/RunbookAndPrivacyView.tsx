@@ -280,7 +280,7 @@ export const RunbookAndPrivacyView: React.FC = () => {
           <div className="border-b border-slate-200 pb-4">
             <h2 className="text-base font-bold text-slate-900">Zero-Trust Privacy & Data Flow Architecture</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Personal Cybersecurity Bot is architected with a strict privacy boundary. Real user data is never transmitted to advertising networks, third-party analytics, or unauthorized telemetry collectors.
+              Shield Labs Bot is architected with a strict privacy boundary. Real user data is never transmitted to advertising networks, third-party analytics, or unauthorized telemetry collectors.
             </p>
           </div>
 
@@ -450,10 +450,10 @@ export const RunbookAndPrivacyView: React.FC = () => {
                 <h3 className="text-xs font-bold text-slate-900 uppercase">Responsible Disclosure (RFC 9116)</h3>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                If you discover a security flaw, vulnerability, or unexpected boundary leak in Personal Cybersecurity Bot, report it responsibly without public disclosure:
+                If you discover a security flaw, vulnerability, or unexpected boundary leak in Shield Labs Bot, report it responsibly without public disclosure:
               </p>
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 font-mono text-xs text-slate-800">
-                <div>Contact: <strong>security@personal-cyber-bot.local</strong></div>
+                <div>Contact: <strong>security@shield-labs-bot.local</strong></div>
                 <div>Encryption: PGP Key ID 0x4A1F89B2</div>
                 <div>Policy: Safe Harbor policy applies to good-faith security research.</div>
                 <div>Response SLA: Initial acknowledgement within 24 hours.</div>
