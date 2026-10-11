@@ -105,7 +105,7 @@ async function ensureServerReady(): Promise<void> {
   }
 
   console.log(`[E2E Runner] Server not detected on ${BASE_URL}. Spawning ephemeral server...`);
-  spawnedServerProcess = spawn('cmd', ['/c', 'npx tsx server.ts'], {
+  spawnedServerProcess = spawn('npx', ['tsx', 'server.ts'], {
     cwd: process.cwd(),
     env: { ...process.env, NODE_ENV: 'test', HOST: '127.0.0.1' },
     stdio: 'pipe',

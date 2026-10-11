@@ -44,7 +44,7 @@ async function main() {
 
   if (!(await ping())) {
     console.log('[RBAC Runner] Local dev server not running. Spawning test server...');
-    spawnedServer = spawn('cmd', ['/c', 'npx tsx server.ts'], {
+    spawnedServer = spawn('npx', ['tsx', 'server.ts'], {
       cwd: process.cwd(),
       env: { ...process.env, NODE_ENV: 'test', HOST: '127.0.0.1' },
       stdio: 'ignore',

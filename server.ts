@@ -3470,7 +3470,7 @@ async function performRealHostSecurityScan(): Promise<{
       const tempDir = path.join(os.homedir(), 'AppData', 'Local', 'Temp');
       if (fs.existsSync(tempDir)) {
         try {
-          const tempEntries = fs.readdirSync(tempDir);
+          const tempEntries = await fs.promises.readdir(tempDir);
           scannedFiles += tempEntries.length;
           for (const item of tempEntries) {
             const ext = path.extname(item).toLowerCase();
@@ -3479,13 +3479,19 @@ async function performRealHostSecurityScan(): Promise<{
               // Real security check: verify if the file has PE magic bytes 'MZ' (0x4D, 0x5A)
               // Benign CAD / AutoCAD text scripts (*.scr) do NOT have PE binary headers.
               let isPE = false;
+              let fd: fs.promises.FileHandle | null = null;
               try {
-                const fd = fs.openSync(fullPath, 'r');
+                fd = await fs.promises.open(fullPath, 'r');
                 const buf = Buffer.alloc(2);
-                fs.readSync(fd, buf, 0, 2, 0);
-                fs.closeSync(fd);
+                await fd.read(buf, 0, 2, 0);
                 isPE = buf[0] === 0x4d && buf[1] === 0x5a;
-              } catch {}
+              } catch {
+                // silently ignore missing or unreadable files
+              } finally {
+                if (fd) {
+                  await fd.close();
+                }
+              }
 
               if (isPE) {
                 threats.push({
