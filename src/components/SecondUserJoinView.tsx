@@ -32,15 +32,65 @@ function extractDomain(urlStr: string): string {
   }
 }
 
+const STORAGE_KEY_NODE = 'pcb_client_joined_node';
+const STORAGE_KEY_AUTH = 'pcb_client_authenticated';
+const STORAGE_KEY_USER = 'pcb_client_assigned_user';
+const STORAGE_KEY_HOSTNAME = 'pcb_client_hostname';
+
+function getOrCreateStableHostname(detectedOs: string): string {
+  try {
+    const existing = localStorage.getItem(STORAGE_KEY_HOSTNAME);
+    if (existing && existing.trim()) return existing.trim();
+    const prefix = detectedOs.split(' ')[0].toUpperCase();
+    const generated = `${prefix}-CLIENT-${Math.floor(1000 + Math.random() * 9000)}`;
+    localStorage.setItem(STORAGE_KEY_HOSTNAME, generated);
+    return generated;
+  } catch {
+    return `${detectedOs.split(' ')[0].toUpperCase()}-CLIENT-7900`;
+  }
+}
+
 export const SecondUserJoinView: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loginUser, setLoginUser] = useState('');
+  // Restore persisted state from localStorage so reload never resets pairing
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    try {
+      return (
+        localStorage.getItem(STORAGE_KEY_AUTH) === 'true' ||
+        !!localStorage.getItem(STORAGE_KEY_NODE)
+      );
+    } catch {
+      return false;
+    }
+  });
+
+  const [loginUser, setLoginUser] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_USER) || '';
+    } catch {
+      return '';
+    }
+  });
   const [loginPass, setLoginPass] = useState('');
   const [loginError, setLoginError] = useState('');
 
-  const [assignedUser, setAssignedUser] = useState('Second User (Laptop)');
+  const [assignedUser, setAssignedUser] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_USER) || 'Second User (Laptop)';
+    } catch {
+      return 'Second User (Laptop)';
+    }
+  });
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [joinedNode, setJoinedNode] = useState<FleetNode | null>(null);
+  const [joinedNode, setJoinedNode] = useState<FleetNode | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_NODE);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [agentScript, setAgentScript] = useState<string>('');
   const [copiedScript, setCopiedScript] = useState(false);
@@ -57,6 +107,28 @@ export const SecondUserJoinView: React.FC = () => {
   const isWindows = /Win/i.test(userAgent) || /Win/i.test(platform);
   const detectedOs = isWindows ? 'Windows 11 / 10' : /Mac/i.test(userAgent) ? 'macOS' : 'Linux';
 
+  // Synchronize joinedNode changes to localStorage
+  const saveJoinedState = (node: FleetNode | null) => {
+    setJoinedNode(node);
+    try {
+      if (node) {
+        localStorage.setItem(STORAGE_KEY_NODE, JSON.stringify(node));
+        localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+        if (node.assignedUser) {
+          localStorage.setItem(STORAGE_KEY_USER, node.assignedUser);
+        }
+        if (node.hostname) {
+          localStorage.setItem(STORAGE_KEY_HOSTNAME, node.hostname);
+        }
+      } else {
+        localStorage.removeItem(STORAGE_KEY_NODE);
+        localStorage.removeItem(STORAGE_KEY_AUTH);
+      }
+    } catch (err) {
+      console.warn('LocalStorage error:', err);
+    }
+  };
+
   // Fetch the PowerShell one-liner script
   useEffect(() => {
     api.getAgentScript()
@@ -71,6 +143,40 @@ export const SecondUserJoinView: React.FC = () => {
       });
   }, []);
 
+  // On page mount / reload: if node is already paired, send an immediate check-in to confirm online status
+  useEffect(() => {
+    if (joinedNode) {
+      const domain = extractDomain(testBrowserUrl);
+      api.joinFleetEndpoint({
+        nodeId: joinedNode.id,
+        clientSessionId: api.getClientSessionId ? api.getClientSessionId() : undefined,
+        assignedUser: joinedNode.assignedUser || assignedUser,
+        hostname: joinedNode.hostname,
+        os: joinedNode.os || detectedOs,
+        cpuModel: joinedNode.cpuModel || '',
+        cpuCores: joinedNode.cpuCores || cpuCores,
+        cpuSpeedMHz: joinedNode.cpuSpeedMHz || 2400,
+        cpuPercent: 12,
+        ramPercent: joinedNode.ramPercent || 45,
+        totalRamGB: joinedNode.totalRamGB || 16,
+        freeRamGB: joinedNode.freeRamGB || 8.8,
+        storageDrives: joinedNode.storageDrives || [],
+        activeForegroundApp: 'Google Chrome',
+        activeProcessesCount: joinedNode.activeProcessesCount || 42,
+        activeBrowserUrl: testBrowserUrl,
+        activeBrowserDomain: domain,
+        harmfulFilesDetected: joinedNode.harmfulFilesDetected || 0,
+        harmfulThreats: joinedNode.harmfulThreats || [],
+      }).then((res) => {
+        if (res && res.node) {
+          saveJoinedState(res.node);
+        }
+      }).catch((err) => {
+        console.warn('[SecondUserJoin] Initial check-in failed, keeping local state:', err);
+      });
+    }
+  }, []); // Run once on mount
+
   const handleBrowserJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -78,9 +184,12 @@ export const SecondUserJoinView: React.FC = () => {
 
     try {
       const domain = extractDomain(testBrowserUrl);
+      const stableHost = joinedNode?.hostname || getOrCreateStableHostname(detectedOs);
       const payload: SecondUserJoinPayload = {
+        nodeId: joinedNode?.id,
+        clientSessionId: api.getClientSessionId ? api.getClientSessionId() : undefined,
         assignedUser: assignedUser.trim() || 'Second User (Laptop)',
-        hostname: `${detectedOs.split(' ')[0].toUpperCase()}-CLIENT-${Math.floor(1000 + Math.random() * 9000)}`,
+        hostname: stableHost,
         os: detectedOs,
         cpuModel: `${detectedOs} Host (${cpuCores} Logical CPU Cores)`,
         cpuCores: cpuCores,
@@ -102,7 +211,7 @@ export const SecondUserJoinView: React.FC = () => {
 
       const res = await api.joinFleetEndpoint(payload);
       if (res && res.node) {
-        setJoinedNode(res.node);
+        saveJoinedState(res.node);
       } else {
         throw new Error(res.message || 'Failed to connect to fleet console.');
       }
@@ -120,7 +229,9 @@ export const SecondUserJoinView: React.FC = () => {
     setIsSendingUrl(true);
     try {
       const res = await api.joinFleetEndpoint({
-        assignedUser,
+        nodeId: joinedNode.id,
+        clientSessionId: api.getClientSessionId ? api.getClientSessionId() : undefined,
+        assignedUser: joinedNode.assignedUser || assignedUser,
         hostname: joinedNode.hostname,
         os: joinedNode.os,
         cpuModel: joinedNode.cpuModel,
@@ -139,7 +250,7 @@ export const SecondUserJoinView: React.FC = () => {
         harmfulThreats: joinedNode.harmfulThreats,
       });
       if (res && res.node) {
-        setJoinedNode(res.node);
+        saveJoinedState(res.node);
       }
     } catch (err) {
       console.error('Failed to report browser URL:', err);
@@ -155,9 +266,11 @@ export const SecondUserJoinView: React.FC = () => {
     const interval = setInterval(() => {
       setHeartbeatCount((c) => c + 1);
       const domain = extractDomain(testBrowserUrl);
-      // Push live update to Supabase via our client API
+      // Push live update via client API
       api.joinFleetEndpoint({
-        assignedUser,
+        nodeId: joinedNode.id,
+        clientSessionId: api.getClientSessionId ? api.getClientSessionId() : undefined,
+        assignedUser: joinedNode.assignedUser || assignedUser,
         hostname: joinedNode.hostname,
         os: joinedNode.os,
         cpuModel: joinedNode.cpuModel || '',
@@ -176,7 +289,7 @@ export const SecondUserJoinView: React.FC = () => {
         harmfulThreats: joinedNode.harmfulThreats || [],
       }).then((res) => {
         if (res && res.node) {
-          setJoinedNode(res.node);
+          saveJoinedState(res.node);
         }
       }).catch(console.error);
     }, 10000);
@@ -192,13 +305,23 @@ export const SecondUserJoinView: React.FC = () => {
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginUser.trim().length > 0 && loginPass.trim().length > 0) {
-      setAssignedUser(loginUser.trim());
+    if (loginUser.trim().length > 0) {
+      const user = loginUser.trim();
+      setAssignedUser(user);
       setIsAuthenticated(true);
       setLoginError('');
+      try {
+        localStorage.setItem(STORAGE_KEY_USER, user);
+        localStorage.setItem(STORAGE_KEY_AUTH, 'true');
+      } catch {}
     } else {
-      setLoginError('Please enter a valid username and password.');
+      setLoginError('Please enter a device name or user identifier (e.g. Rohan Laptop).');
     }
+  };
+
+  const handleDisconnect = () => {
+    saveJoinedState(null);
+    setIsAuthenticated(false);
   };
 
   if (!isAuthenticated) {
@@ -207,10 +330,10 @@ export const SecondUserJoinView: React.FC = () => {
         <div className="max-w-sm w-full bg-white border border-slate-200 rounded-2xl p-6 shadow-xl">
           <div className="text-center space-y-2 mb-6">
             <div className="inline-flex p-3 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-200">
-              <Lock className="w-6 h-6" />
+              <Laptop className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-bold text-slate-900">Device User Login</h2>
-            <p className="text-xs text-slate-500">Please authenticate to join the fleet.</p>
+            <h2 className="text-xl font-bold text-slate-900">Pair Remote Laptop</h2>
+            <p className="text-xs text-slate-500">Connect this computer to the central Shield Labs Bot fleet.</p>
           </div>
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             {loginError && (
@@ -220,7 +343,7 @@ export const SecondUserJoinView: React.FC = () => {
               </div>
             )}
             <div>
-              <label htmlFor="join-username" className="block text-xs font-semibold text-slate-700 mb-1">Username / Identifier</label>
+              <label htmlFor="join-username" className="block text-xs font-semibold text-slate-700 mb-1">Device Name / Your Name</label>
               <input
                 id="join-username"
                 name="username"
@@ -229,24 +352,12 @@ export const SecondUserJoinView: React.FC = () => {
                 value={loginUser}
                 onChange={(e) => setLoginUser(e.target.value)}
                 className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="e.g. John Doe"
+                placeholder="e.g. Rohan's Laptop"
               />
             </div>
-            <div>
-              <label htmlFor="join-password" className="block text-xs font-semibold text-slate-700 mb-1">Access Code / Password</label>
-              <input
-                id="join-password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                className="w-full text-sm px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Enter password"
-              />
-            </div>
-            <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm">
-              Authenticate & Continue
+            <button type="submit" className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg text-sm transition-colors shadow-sm flex items-center justify-center gap-2">
+              <span>Continue to Pairing Portal</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
           </form>
         </div>
@@ -657,7 +768,7 @@ export const SecondUserJoinView: React.FC = () => {
                 You can keep this browser tab open to maintain continuous telemetry reporting.
               </span>
               <button
-                onClick={() => setJoinedNode(null)}
+                onClick={handleDisconnect}
                 className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
               >
                 Disconnect / Change User

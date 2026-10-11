@@ -1,4 +1,4 @@
-# Shield Labs Bot & Multi-Node Fleet Manager
+# Shield Labs Bot & Multi-Node Fleet Cockpit
 
 Defensive, privacy-first desktop cybersecurity console and unified multi-node fleet management platform on Windows.
 
@@ -6,45 +6,63 @@ Defensive, privacy-first desktop cybersecurity console and unified multi-node fl
 
 ## 1. Unified Single Web Architecture
 
-All features—threat monitoring, hardware telemetry, deep security posture, and multi-node fleet management—are consolidated into **one single web application on Port 3000** (no split servers or secondary dependencies).
+All features—threat monitoring, hardware telemetry, deep security posture, multi-user authentication with email OTP, and multi-node fleet management—are consolidated into **one single web application on Port 3000** (no split servers or secondary dependencies).
 
 | Component | Technology Stack | Port | Purpose |
 | :--- | :--- | :--- | :--- |
-| **Unified Security & Fleet Console** | React 19, TypeScript, Vite, Tailwind CSS v4, Express, TanStack Query | `127.0.0.1:3000` | Single-pane administrative dashboard: real-time threat defense, multi-node remote laptop fleet management, live kernel hardware telemetry, active application tracking, transparent user notices, cryptographic audit ledger. |
+| **Unified Security & Fleet Console** | React 19, TypeScript, Vite, Tailwind CSS v4, Express, TanStack Query, Supabase | `0.0.0.0:3000` | Single-pane administrative dashboard: real-time threat defense, multi-node remote laptop fleet management, live hardware telemetry, active application tracking, transparent user notices, cryptographic audit ledger. |
 
 ---
 
-## 2. Multi-Node Fleet & Remote Laptop Management
+## 2. Authentication & Master Admin Authority
 
-- **Single Admin, Multi-Laptop Visibility**: One administrator can monitor and manage multiple enrolled laptops/PCs simultaneously across local subnets, VPNs, or remote network nodes.
-- **Persistent User Transparency**: Monitored endpoints display a clear, persistent transparency badge confirming that security telemetry (CPU, RAM, active application name, threat scans) is being shared with the administrator.
-- **Continuous Defense (No Arbitrary Time Limits)**: Protection and health monitoring operate continuously without expiring countdowns.
-- **Strict Privacy Guarantees**:
+- **Canonical Master Admin**:
+  - **Email**: `admin@shieldlabs.local` (Configurable via `ADMIN_EMAIL`)
+  - **Password**: Configurable via `ADMIN_PASSWORD` in `.env` (Default seed: `AdminMasterPassword123!`)
+  - **Host PIN**: Supported on the host machine (`1234` default seed or custom configured via `MASTER_PIN`).
+  - *Authority*: Only the Master Admin can access the **👥 Users** management modal, view real-time online status (`🟢 Active / Online Now`), assign roles, or delete users.
+- **Universal Multi-User Sign Up**:
+  - Collects Full Name, Email, Phone Number, Country, and Password.
+  - **Zero Role Selection**: All newly registered users are strictly assigned `SECURITY_ANALYST` by default.
+  - **Role Immutability**: No regular user can change their role anywhere; self-elevation attempts return `403 ONLY_MASTER_ADMIN_CAN_CHANGE_ROLES`.
+- **6-Digit Email OTP Verification**:
+  - Dual-mode OTP engine dispatches a 6-digit numeric verification code on registration.
+  - Prevents automated account creation and verifies user identity.
+
+---
+
+## 3. Multi-Node Fleet & Remote Laptop Management
+
+- **Single Admin, Multi-Laptop Visibility**: One administrator can monitor and manage multiple enrolled laptops/PCs simultaneously across local subnets or remote network nodes.
+- **Persistent User Transparency**: Monitored endpoints display a clear, persistent transparency badge confirming that security telemetry is shared with the administrator.
+- **Zero-Trust Device Privacy**: Secondary laptop analysts only see diagnostics for their own machine; host machine hardware metrics remain confidential to the Master Admin.
+- **PowerShell Agent One-Liner**:
+  Run in PowerShell on the second laptop:
+  ```powershell
+  irm http://<HOST_LAN_IP>:3000/api/v1/fleet/agent-script | iex
+  ```
+  Features:
+  - Automatic Administrator privilege detection ("VIP Pass").
+  - Real scan of `Downloads` and `Temp` folders for suspicious binaries.
+  - Dynamic CPU % and physical RAM metrics.
+  - Real-time command loop for remote file quarantine and process termination.
+
+---
+
+## 4. Hardened Security & Zero-Trust Guarantees
+
+- **PBKDF2 SHA-256 Vault**: Master PINs, user passwords, and emergency recovery keys use 100,000 PBKDF2 iterations with distinct 16-byte random salts.
+- **Timing-Safe Authentication**: Authenticated comparisons utilize `crypto.timingSafeEqual` with brute-force lockout protections.
+- **SSRF & Decimal/Octal IP Normalization**: Multi-layer boundary firewall blocking loopback, cloud metadata (169.254.169.254), RFC 1918 subnets, and canonicalizing integer/octal IP evasion vectors.
+- **Zero-Covert Surveillance**:
   - **ZERO Keystroke Logging**
   - **ZERO Screen Recording or Webcam Access**
   - **ZERO Personal Credential or Email Inspection**
   - **Encrypted Local Audit Trail**
-- **Live Hardware & Network Telemetry**:
-  - Real CPU load and physical RAM metrics (WMI/PowerShell/os.cpus/totalmem)
-  - Real active foreground application detection (`chrome.exe`, `Code.exe`, etc.)
-  - Real ARP subnet discovery of connected laptops and network devices
-  - On-demand remote TCP security probing & OS fingerprinting
 
 ---
 
-## 3. Hardened Security & Zero-Trust Guarantees
-
-- **PBKDF2 SHA-256 Vault**: Master PINs and emergency recovery keys use 100,000 PBKDF2 iterations with distinct 16-byte random salts. Zero plaintext secrets stored on disk or logs.
-- **Timing-Safe Authentication**: Authenticated comparisons utilize `crypto.timingSafeEqual` with a 5-failure / 30-second brute-force lockout.
-- **Server-Enforced Lockdown**: All mutating state requests (`POST`, `PUT`, `DELETE`) are blocked server-side with `CONSOLE_LOCKED` whenever the console is locked. Automatic 15-minute inactivity lock.
-- **Strict Loopback Boundary**: The Express service binds to `127.0.0.1`—inaccessible from unauthorized external networks.
-- **SSRF & Decimal/Octal IP Normalization**: Multi-layer boundary firewall blocking loopback, cloud metadata (169.254.169.254), RFC 1918 subnets, and canonicalizing integer/octal IP evasion vectors.
-- **Data Redaction & Prompt Injection Guard**: Automatic redaction of credentials, API keys, emails, and filesystem paths before AI processing; regex injection filtering and delimited context tags.
-- **Cryptographic Audit Ledger**: Tamper-evident monotonic sequence envelopes with HMAC-SHA256 snapshot signing and verified restore.
-
----
-
-## 4. Quick Start & One-Click Launch
+## 5. Quick Start & Execution
 
 ### Prerequisites
 - **Node.js** (v20+ LTS recommended)
@@ -54,47 +72,44 @@ Double-click `launch.bat` or run in PowerShell:
 ```powershell
 .\launch.ps1
 ```
-This automatically starts the Unified Web Security & Fleet Platform on `http://127.0.0.1:3000` and opens your default browser.
 
 ### Manual Launch
 ```bash
 npm install --legacy-peer-deps
-npm run dev
+npm run build
+npm start
 ```
+
+### Allow Other Laptops on Wi-Fi (Firewall)
+Right-click and run `open_firewall_port_3000.bat` as Administrator to open port 3000 in Windows Firewall.
 
 ---
 
-## 5. Automated Verification Suites
+## 6. Automated Verification Suites
 
 Run all test suites locally to verify 100% launch readiness:
 
 ```bash
-# 1. Typecheck & Linter (0 errors)
+# Typecheck & Linter (0 errors)
 npm run lint
 
-# 2. Production Vite Bundle (built in <1s)
+# Production Vite Bundle
 npm run build
 
-# 3. Security Fixes & SSRF Encoding Check (10/10 assertions)
-npm run test:security
+# RBAC, Concurrency & Security Gate Tests (10/10 checks)
+npm run test:rbac
 
-# 4. Hardware Safety & Telemetry Test (6/6 checks)
-npm run test:safety
-
-# 5. Remote Node & IP Prober Test (5/5 checks)
-npm run test:remote
-
-# 6. Multi-Node Fleet & Transparency Test (5/5 checks)
+# Multi-Node Fleet & Transparency Tests (7/7 checks)
 npm run test:fleet
 
-# 7. Run All Core Suites Together
-npm run test:all
+# End-to-End User Authentication Suite (45/45 assertions)
+npm run test:e2e
 
-# 8. Full Production Release Verification Suite (14/14 checks)
-npx tsx tests/release_verification.ts
+# Run all test suites
+npm test
 ```
 
 ---
 
-## 6. License
-Apache-2.0. Clean software supply chain (zero copyleft/GPL constraints).
+## 7. License
+Apache-2.0. Clean software supply chain.

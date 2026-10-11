@@ -25,6 +25,7 @@ import {
   Mouse,
   Usb,
   Info,
+  Laptop,
 } from 'lucide-react';
 import { api } from '../api/client';
 import {
@@ -33,10 +34,12 @@ import {
   SecurityPostureResponse,
   RemoteNodeProbeResponse,
   HostNetworkTelemetry,
+  FleetNode,
 } from '../types/security';
 
 export const HardwareSafetyInspector: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'verdict' | 'hardware' | 'network' | 'persistence' | 'remote'>('verdict');
+  const [selectedNodeId, setSelectedNodeId] = useState<string>('local');
   const [remoteHost, setRemoteHost] = useState('192.168.29.1');
   const [remoteResult, setRemoteResult] = useState<RemoteNodeProbeResponse | null>(null);
   const [isProbing, setIsProbing] = useState(false);
@@ -98,6 +101,35 @@ export const HardwareSafetyInspector: React.FC = () => {
     queryFn: api.getNetworkInterfaces,
     refetchInterval: 12000,
   });
+
+  const { data: authSession } = useQuery({
+    queryKey: ['auth_session'],
+    queryFn: api.getAuthSession,
+    refetchInterval: 15000,
+  });
+
+  const effectiveRole = authSession?.role || localStorage.getItem('pcb_user_role') || 'NO_ROLE';
+  const isAdmin = effectiveRole === 'ADMIN';
+
+  const { data: fleetData } = useQuery({
+    queryKey: ['fleet_nodes'],
+    queryFn: api.getFleetNodes,
+    refetchInterval: 10000,
+  });
+
+  const fleetNodes: FleetNode[] = fleetData?.nodes || [];
+  const remoteFleetNodes: FleetNode[] = fleetNodes.filter((n: FleetNode) => !n.isLocal);
+  const selectedRemoteNode: FleetNode | undefined =
+    isAdmin && selectedNodeId !== 'local'
+      ? remoteFleetNodes.find((n: FleetNode) => n.id === selectedNodeId)
+      : undefined;
+
+  // For non-admin users, if activeTab is remote, fall back to verdict
+  React.useEffect(() => {
+    if (!isAdmin && activeTab === 'remote') {
+      setActiveTab('verdict');
+    }
+  }, [isAdmin, activeTab]);
 
   const handleRefreshAll = () => {
     refetchVerdict();
@@ -223,17 +255,19 @@ export const HardwareSafetyInspector: React.FC = () => {
           <span>Autostart & Persistence</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('remote')}
-          className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-            activeTab === 'remote'
-              ? 'border-emerald-600 text-slate-900'
-              : 'border-transparent text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Globe className="w-4 h-4 text-slate-600" />
-          <span>Access Remote IP Node</span>
-        </button>
+        {isAdmin && (
+          <button
+            onClick={() => setActiveTab('remote')}
+            className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+              activeTab === 'remote'
+                ? 'border-emerald-600 text-slate-900'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Globe className="w-4 h-4 text-slate-600" />
+            <span>Access Remote IP Node</span>
+          </button>
+        )}
       </div>
 
       {/* TAB 1: "IS IT SAFE?" VERDICT */}
@@ -325,171 +359,311 @@ export const HardwareSafetyInspector: React.FC = () => {
       {/* TAB 2: HARDWARE & DIAGNOSTICS */}
       {activeTab === 'hardware' && (
         <div className="space-y-6">
+          {/* Hardware Source Device Selector Banner */}
+          <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-lg border ${
+                  selectedNodeId === 'local' || !selectedRemoteNode
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                    : 'bg-indigo-50 border-indigo-200 text-indigo-700'
+                }`}>
+                  {selectedNodeId === 'local' || !selectedRemoteNode ? (
+                    <Server className="w-5 h-5 shrink-0" />
+                  ) : (
+                    <Laptop className="w-5 h-5 shrink-0" />
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">
+                      Hardware Telemetry Target
+                    </h3>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                      selectedNodeId === 'local' || !selectedRemoteNode
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-indigo-100 text-indigo-800 border-indigo-300'
+                    }`}>
+                      {selectedNodeId === 'local' || !selectedRemoteNode ? 'Host Machine (Laptop 1)' : 'Remote Fleet Device'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Viewing telemetry for:{' '}
+                    <span className="font-semibold text-slate-900">
+                      {!isAdmin
+                        ? `This Device (${authSession?.device_name || authSession?.user_name || 'My Laptop'})`
+                        : selectedNodeId === 'local' || !selectedRemoteNode
+                        ? `🖥️ Laptop 1 (Host Server: ${networkData?.primaryIp || '192.168.29.240'})`
+                        : `💻 ${selectedRemoteNode.hostname || selectedRemoteNode.assignedUser} (IP: ${selectedRemoteNode.ipAddress})`}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {isAdmin ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNodeId('local')}
+                    className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                      selectedNodeId === 'local'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Server className="w-3.5 h-3.5" />
+                    <span>Laptop 1 (Host Server)</span>
+                  </button>
+                  {remoteFleetNodes.map((node: FleetNode) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => setSelectedNodeId(node.id)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition-all flex items-center gap-1.5 ${
+                        selectedNodeId === node.id
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <Laptop className="w-3.5 h-3.5" />
+                      <span>{node.hostname || node.assignedUser || 'Remote Laptop'}</span>
+                      <span className="text-[10px] opacity-80 font-mono">({node.ipAddress})</span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 border border-emerald-300 text-emerald-900 flex items-center gap-1.5">
+                    <Laptop className="w-3.5 h-3.5 text-emerald-600" />
+                    📍 Scoped: {authSession?.device_name || authSession?.user_name || 'My Laptop'}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    Zero-Trust Privacy Guard
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {isAdmin && remoteFleetNodes.length === 0 && selectedNodeId === 'local' && (
+              <div className="p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <span>
+                  💡 <strong>Want to monitor a second laptop?</strong> Run the one-click PowerShell agent on the second laptop:
+                </span>
+                <code className="text-[11px] font-mono font-bold bg-white px-2 py-1 rounded border border-slate-300 text-slate-900 shrink-0 select-all">
+                  irm http://{networkData?.primaryIp || '192.168.29.240'}:3000/api/v1/fleet/agent-script | iex
+                </code>
+              </div>
+            )}
+          </div>
+
           {isHardwareLoading || !hardware ? (
             <div className="p-8 bg-white border border-slate-200 rounded-xl animate-pulse space-y-4">
               <div className="h-6 w-48 bg-slate-200 rounded" />
               <div className="h-32 w-full bg-slate-100 rounded" />
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* CPU Card */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Processor (CPU)</span>
-                  <Cpu className="w-4 h-4 text-slate-600" />
-                </div>
-                <div className="text-base font-bold text-slate-900 truncate" title={hardware.cpu.model}>
-                  {hardware.cpu.model}
-                </div>
-                <div className="text-xs text-slate-600">
-                  {hardware.cpu.cores} Physical / Logical Cores &bull; {hardware.cpu.baseSpeedMHz} MHz
-                </div>
-                <div className="pt-2 space-y-1">
-                  <div className="flex justify-between text-xs text-slate-600">
-                    <span>Active Workload</span>
-                    <span className="font-bold text-slate-900">{hardware.cpu.loadPct}%</span>
-                  </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                    <div
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                      style={{ width: `${hardware.cpu.loadPct}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
+          ) : (() => {
+            const activeDisplayCpu = selectedRemoteNode
+              ? {
+                  model: selectedRemoteNode.cpuModel || `${selectedRemoteNode.hostname} Multi-Core CPU`,
+                  cores: selectedRemoteNode.cpuCores || 4,
+                  baseSpeedMHz: selectedRemoteNode.cpuSpeedMHz || 2400,
+                  loadPct: selectedRemoteNode.cpuPercent,
+                }
+              : hardware.cpu;
 
-              {/* Memory (RAM) Card */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Memory (RAM)</span>
-                  <Activity className="w-4 h-4 text-slate-600" />
-                </div>
-                <div className="text-base font-bold text-slate-900">
-                  {hardware.ram.usedGB} GB used of {hardware.ram.totalGB} GB
-                </div>
-                <div className="text-xs text-slate-600">
-                  {hardware.ram.freeGB} GB Available for application security
-                </div>
-                <div className="pt-2 space-y-1">
-                  <div className="flex justify-between text-xs text-slate-600">
-                    <span>Memory Pressure</span>
-                    <span className="font-bold text-slate-900">{hardware.ram.usedPct}%</span>
+            const activeDisplayRam = selectedRemoteNode
+              ? {
+                  usedGB: parseFloat(((selectedRemoteNode.totalRamGB * selectedRemoteNode.ramPercent) / 100).toFixed(1)),
+                  totalGB: selectedRemoteNode.totalRamGB,
+                  freeGB: selectedRemoteNode.freeRamGB,
+                  usedPct: selectedRemoteNode.ramPercent,
+                }
+              : hardware.ram;
+
+            const activeDisplayStorage =
+              selectedRemoteNode && selectedRemoteNode.storageDrives && selectedRemoteNode.storageDrives.length > 0
+                ? selectedRemoteNode.storageDrives.map((d: any) => ({
+                    drive: d.drive,
+                    totalGB: d.totalGB,
+                    freeGB: d.freeGB,
+                    usedPct: d.usedPct,
+                    fileSystem: 'NTFS',
+                  }))
+                : hardware.storage;
+
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* CPU Card */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span className="text-xs font-bold uppercase tracking-wider">Processor (CPU)</span>
+                    <Cpu className="w-4 h-4 text-slate-600" />
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        hardware.ram.usedPct > 85 ? 'bg-rose-500' : 'bg-emerald-500'
-                      }`}
-                      style={{ width: `${hardware.ram.usedPct}%` }}
-                    />
+                  <div className="text-base font-bold text-slate-900 truncate" title={activeDisplayCpu.model}>
+                    {activeDisplayCpu.model}
                   </div>
-                </div>
-              </div>
-
-              {/* System Uptime & SMART Status */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between text-slate-500">
-                  <span className="text-xs font-bold uppercase tracking-wider">Device Health</span>
-                  <Clock className="w-4 h-4 text-slate-600" />
-                </div>
-                <div className="text-base font-bold text-slate-900">
-                  {hardware.uptimeHours} Hours Uptime
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <span>SMART Disk Health:</span>
-                  <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                    {hardware.smartStatus}
-                  </span>
-                </div>
-                <div className="pt-2 text-xs text-slate-500">
-                  {hardware.deviceErrors.length === 0 ? (
-                    <span className="text-emerald-700 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> All peripheral drivers nominal
-                    </span>
-                  ) : (
-                    <span className="text-amber-700 flex items-center gap-1">
-                      <AlertTriangle className="w-3.5 h-3.5" /> {hardware.deviceErrors.length} device(s) reporting error
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Storage Partitions */}
-              <div className="col-span-1 md:col-span-3 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between text-slate-900">
-                  <h3 className="text-sm font-bold flex items-center gap-2">
-                    <HardDrive className="w-4 h-4 text-slate-600" />
-                    Storage Volumes & Free Space
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {hardware.storage.map((d, idx) => (
-                    <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-900">Drive {d.drive} ({d.fileSystem})</span>
-                        <span className="text-slate-600">{d.freeGB} GB free of {d.totalGB} GB</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            d.usedPct > 90 ? 'bg-rose-500' : 'bg-emerald-500'
-                          }`}
-                          style={{ width: `${d.usedPct}%` }}
-                        />
-                      </div>
+                  <div className="text-xs text-slate-600">
+                    {activeDisplayCpu.cores} Physical / Logical Cores &bull; {activeDisplayCpu.baseSpeedMHz} MHz
+                  </div>
+                  <div className="pt-2 space-y-1">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Active Workload</span>
+                      <span className="font-bold text-slate-900">{activeDisplayCpu.loadPct}%</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Physical USB Hardware & Connected Peripherals */}
-              <div className="col-span-1 md:col-span-3 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
-                <div className="flex items-center justify-between text-slate-900">
-                  <h3 className="text-sm font-bold flex items-center gap-2">
-                    <Usb className="w-4 h-4 text-slate-600" />
-                    Physical USB Hardware &amp; Connected Peripherals
-                  </h3>
-                  <span className="text-xs text-slate-500">Mice, Keyboards &amp; Hardware Controllers</span>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                      <div
+                        className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                        style={{ width: `${Math.min(100, Math.max(0, activeDisplayCpu.loadPct))}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                {hardware.usbPeripherals && hardware.usbPeripherals.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {hardware.usbPeripherals.map((dev, idx) => (
-                      <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
-                        <div className="p-2 bg-white rounded-md border border-slate-200 text-slate-600 shrink-0">
-                          {dev.category === 'Mouse' ? (
-                            <Mouse className="w-4 h-4 text-indigo-600" />
-                          ) : (
-                            <Usb className="w-4 h-4 text-slate-600" />
-                          )}
+                {/* Memory (RAM) Card */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span className="text-xs font-bold uppercase tracking-wider">Memory (RAM)</span>
+                    <Activity className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="text-base font-bold text-slate-900">
+                    {activeDisplayRam.usedGB} GB used of {activeDisplayRam.totalGB} GB
+                  </div>
+                  <div className="text-xs text-slate-600">
+                    {activeDisplayRam.freeGB} GB Available for application security
+                  </div>
+                  <div className="pt-2 space-y-1">
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Memory Pressure</span>
+                      <span className="font-bold text-slate-900">{activeDisplayRam.usedPct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          activeDisplayRam.usedPct > 85 ? 'bg-rose-500' : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${Math.min(100, Math.max(0, activeDisplayRam.usedPct))}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* System Uptime & SMART Status */}
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between text-slate-500">
+                    <span className="text-xs font-bold uppercase tracking-wider">Device Health</span>
+                    <Clock className="w-4 h-4 text-slate-600" />
+                  </div>
+                  <div className="text-base font-bold text-slate-900 truncate">
+                    {selectedRemoteNode ? `${selectedRemoteNode.hostname} (Remote Node)` : `${hardware.uptimeHours} Hours Uptime`}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600 truncate">
+                    <span>{selectedRemoteNode ? 'Operating System:' : 'SMART Disk Health:'}</span>
+                    <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 truncate">
+                      {selectedRemoteNode ? selectedRemoteNode.os : hardware.smartStatus}
+                    </span>
+                  </div>
+                  <div className="pt-2 text-xs text-slate-500">
+                    {selectedRemoteNode ? (
+                      <span className="text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Active App: {selectedRemoteNode.activeForegroundApp || 'explorer.exe'}
+                      </span>
+                    ) : hardware.deviceErrors.length === 0 ? (
+                      <span className="text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> All peripheral drivers nominal
+                      </span>
+                    ) : (
+                      <span className="text-amber-700 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5" /> {hardware.deviceErrors.length} device(s) reporting error
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Storage Partitions */}
+                <div className="col-span-1 md:col-span-3 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between text-slate-900">
+                    <h3 className="text-sm font-bold flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-slate-600" />
+                      Storage Volumes &amp; Free Space
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {activeDisplayStorage.map((d: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-900">Drive {d.drive} ({d.fileSystem})</span>
+                          <span className="text-slate-600">{d.freeGB} GB free of {d.totalGB} GB</span>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs font-bold text-slate-900 truncate" title={dev.name}>
-                            {dev.name}
-                          </div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-medium">
-                              {dev.category}
-                            </span>
-                            {dev.manufacturer && <span className="truncate">{dev.manufacturer}</span>}
-                          </div>
-                          <div className="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3" /> Status: {dev.status} (Hardware Connected)
-                          </div>
+                        <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${
+                              d.usedPct > 90 ? 'bg-rose-500' : 'bg-emerald-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, d.usedPct))}%` }}
+                          />
                         </div>
                       </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Standard HID peripherals (Mouse, Keyboard) connected and operational.</span>
+                </div>
+
+                {/* Physical USB Hardware & Connected Peripherals */}
+                <div className="col-span-1 md:col-span-3 bg-white p-5 rounded-xl border border-slate-200 shadow-2xs space-y-3">
+                  <div className="flex items-center justify-between text-slate-900">
+                    <h3 className="text-sm font-bold flex items-center gap-2">
+                      <Usb className="w-4 h-4 text-slate-600" />
+                      Physical USB Hardware &amp; Connected Peripherals
+                    </h3>
+                    <span className="text-xs text-slate-500">Mice, Keyboards &amp; Hardware Controllers</span>
                   </div>
-                )}
+
+                  {selectedRemoteNode ? (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                        <span>Remote Endpoint Hardware Shield Active. Process count: <strong>{selectedRemoteNode.activeProcessesCount}</strong></span>
+                      </div>
+                      <span className="text-[11px] font-mono text-slate-500">Host IP: {selectedRemoteNode.ipAddress}</span>
+                    </div>
+                  ) : hardware.usbPeripherals && hardware.usbPeripherals.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {hardware.usbPeripherals.map((dev, idx) => (
+                        <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-2.5">
+                          <div className="p-2 bg-white rounded-md border border-slate-200 text-slate-600 shrink-0">
+                            {dev.category === 'Mouse' ? (
+                              <Mouse className="w-4 h-4 text-indigo-600" />
+                            ) : (
+                              <Usb className="w-4 h-4 text-slate-600" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-bold text-slate-900 truncate" title={dev.name}>
+                              {dev.name}
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                              <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-medium">
+                                {dev.category}
+                              </span>
+                              {dev.manufacturer && <span className="truncate">{dev.manufacturer}</span>}
+                            </div>
+                            <div className="text-[10px] text-emerald-700 font-semibold mt-1 flex items-center gap-1">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Status: {dev.status} (Hardware Connected)
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      <span>Standard HID peripherals (Mouse, Keyboard) connected and operational.</span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
@@ -717,16 +891,11 @@ export const HardwareSafetyInspector: React.FC = () => {
                 </p>
               </div>
 
-              <a
-                href="http://127.0.0.1:8501"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors shrink-0 shadow-2xs"
-              >
+              <div className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <Server className="w-3.5 h-3.5" />
-                <span>Launch Streamlit Node Manager (:8501)</span>
-                <ExternalLink className="w-3 h-3 ml-0.5" />
-              </a>
+                <span>Agentless Engine Active</span>
+              </div>
             </div>
 
             {/* Input Bar & Presets */}

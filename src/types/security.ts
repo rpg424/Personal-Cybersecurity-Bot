@@ -226,7 +226,10 @@ export interface ConsoleAuthSession {
   lockout_remaining_seconds: number;
   user_name: string;
   device_name: string;
+  email?: string;
+  role?: UserRole;
   has_configured_pin: boolean;
+  active_users_count?: number;
 }
 
 export type EvidenceClassification = 'Confirmed' | 'Reported' | 'Inferred' | 'Contradicted' | 'Stale' | 'Synthetic';
@@ -513,10 +516,15 @@ export interface FleetNode {
   activeBrowserRiskScore?: number;
   activeBrowserCategory?: string;
   blockedDomains?: string[];
+  allowedDomains?: string[];
   blockedFiles?: string[];
+  deletedFiles?: string[];
+  clientSessionId?: string;
 }
 
 export interface SecondUserJoinPayload {
+  nodeId?: string;
+  clientSessionId?: string;
   assignedUser: string;
   hostname?: string;
   cpuModel?: string;
@@ -591,15 +599,20 @@ export interface ClientTransparencyStatus {
   lastHeartbeatUtc: string;
 }
 
-export type UserRole = 'ADMIN' | 'SECURITY_ANALYST' | 'AUDITOR';
+export type UserRole = 'ADMIN' | 'SECURITY_ANALYST' | 'AUDITOR' | 'NO_ROLE';
 
 export interface UserProfile {
   id: string;
   fullName: string;
   email: string;
+  phone: string;
+  country: string;
   role: UserRole;
   avatarUrl?: string;
   deviceName?: string;
+  isVerified?: boolean;
+  disabled?: boolean;
+  isOnline?: boolean;
   createdAtUtc?: string;
   lastLoginUtc?: string;
 }

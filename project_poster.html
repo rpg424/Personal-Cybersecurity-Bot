@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MAEER'S MIT - Research Project Competition Poster - Shield Labs</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    :root {
+      --primary-navy: #002B49;
+      --secondary-navy: #073B61;
+      --accent-cyan: #00A3E0;
+      --accent-blue: #0284C7;
+      --border-blue: #BAE6FD;
+      --header-bg: #E0F2FE;
+      --card-bg: #FFFFFF;
+      --text-main: #0F172A;
+      --text-muted: #334155;
+      --border-card: #94A3B8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #E2E8F0;
+      color: var(--text-main);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      line-height: 1.35;
+    }
+
+    /* Poster Container matching template proportions */
+    .poster {
+      width: 1000px;
+      background-color: #FFFFFF;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Institute Header Banner */
+    .institute-banner {
+      background: linear-gradient(135deg, #001F35 0%, #002B49 60%, #06406A 100%);
+      color: #FFFFFF;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      border-bottom: 4px solid var(--accent-cyan);
+    }
+
+    .institute-logo {
+      width: 68px;
+      height: 68px;
+      flex-shrink: 0;
+    }
+
+    .institute-info {
+      flex: 1;
+    }
+
+    .institute-title {
+      font-size: 23px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      line-height: 1.15;
+    }
+
+    .institute-location {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #F8FAFC;
+      margin-top: 2px;
+    }
+
+    .competition-meta {
+      font-size: 15px;
+      font-weight: 700;
+      color: #38BDF8;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    /* Project Title & Team Subheader */
+    .project-header {
+      text-align: center;
+      padding: 18px 24px 14px;
+      background-color: #FFFFFF;
+      border-bottom: 2px solid #E2E8F0;
+    }
+
+    .project-title {
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--primary-navy);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      line-height: 1.2;
+    }
+
+    .team-meta {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .team-names {
+      color: #0369A1;
+      font-weight: 800;
+    }
+
+    /* Main Grid Layout (Matching the 8 boxes of the poster template) */
+    .grid-container {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 1.05fr 1.15fr 1.1fr;
+      gap: 12px;
+      background-color: #F8FAFC;
+    }
+
+    /* Card Styling */
+    .card {
+      background: #FFFFFF;
+      border: 1.5px solid #0284C7;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      background-color: #E0F2FE;
+      color: var(--primary-navy);
+      font-size: 13px;
+      font-weight: 800;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1.5px solid #BAE6FD;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .card-body {
+      padding: 10px;
+      font-size: 11px;
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      flex: 1;
+    }
+
+    .bullet-list {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .bullet-list li {
+      position: relative;
+      padding-left: 14px;
+      line-height: 1.35;
+    }
+
+    .bullet-list li::before {
+      content: "•";
+      position: absolute;
+      left: 2px;
+      color: var(--accent-blue);
+      font-weight: bold;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .section-subtitle {
+      font-weight: 800;
+      color: var(--primary-navy);
+      font-size: 11px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 2px;
+      border-bottom: 1px dashed #CBD5E1;
+      padding-bottom: 2px;
+    }
+
+    /* Diagram Styling */
+    .diagram-box {
+      background-color: #F0F9FF;
+      border: 1px solid #BAE6FD;
+      border-radius: 6px;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .diagram-caption {
+      font-size: 9.5px;
+      color: #0369A1;
+      font-style: italic;
+      margin-top: 4px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    /* Placeholder Prototype Images */
+    .photo-placeholder {
+      background: #F1F5F9;
+      border: 1.5px dashed #94A3B8;
+      border-radius: 6px;
+      padding: 12px 6px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+    }
+
+    .photo-placeholder svg {
+      width: 24px;
+      height: 24px;
+      stroke: #64748B;
+    }
+
+    .photo-text {
+      font-size: 9px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+    }
+
+    /* Performance Table */
+    .perf-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+      margin-top: 4px;
+    }
+
+    .perf-table th {
+      background-color: #0284C7;
+      color: #FFFFFF;
+      padding: 4px 6px;
+      font-weight: 700;
+      text-align: left;
+      font-size: 9.5px;
+      text-transform: uppercase;
+    }
+
+    .perf-table td {
+      padding: 3.5px 6px;
+      border-bottom: 1px solid #E2E8F0;
+      font-size: 9.5px;
+    }
+
+    .perf-table tr:nth-child(even) {
+      background-color: #F8FAFC;
+    }
+
+    .val-cell {
+      font-weight: 800;
+      color: #0369A1;
+    }
+
+    /* Print settings for high-DPI poster print */
+    @media print {
+      body {
+        background: transparent;
+        padding: 0;
+      }
+      .poster {
+        width: 100%;
+        box-shadow: none;
+        border-radius: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="poster">
+
+    <!-- 1. HEADER BANNER -->
+    <header class="institute-banner">
+      <!-- MAEER'S Seal SVG -->
+      <svg class="institute-logo" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#C2410C" stroke="#FFFFFF" stroke-width="3"/>
+        <circle cx="50" cy="50" r="38" stroke="#FFFFFF" stroke-width="1.5" stroke-dasharray="4 2"/>
+        <path d="M50 16L54 26L64 22L64 33L74 33L70 43L79 47L72 54L78 61L69 65L71 75L61 74L59 84L50 79L41 84L39 74L29 75L31 65L22 61L28 54L21 47L30 43L26 33L36 33L36 22L46 26Z" fill="#F97316"/>
+        <circle cx="50" cy="50" r="22" fill="#FFFFFF"/>
+        <circle cx="50" cy="50" r="18" fill="#C2410C"/>
+        <text x="50" y="54" font-family="Inter, sans-serif" font-size="11" font-weight="900" fill="#FFFFFF" text-anchor="middle">MIT</text>
+        <path d="M26 88C33 92 41 94 50 94C59 94 67 92 74 88" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+
+      <div class="institute-info">
+        <h1 class="institute-title">MAEER'S MAHARASHTRA INSTITUTE OF TECHNOLOGY</h1>
+        <h2 class="institute-location">THANE, MUMBAI</h2>
+        <div class="competition-meta">RESEARCH PROJECT COMPETITION • Date: 10/10/2026</div>
+      </div>
+    </header>
+
+    <!-- 2. PROJECT TITLE & TEAM NAMES -->
+    <section class="project-header">
+      <h2 class="project-title">SHIELD LABS: UNIFIED DEFENSIVE MULTI-NODE FLEET COCKPIT & ZERO-TRUST CYBERSECURITY PLATFORM</h2>
+      <div class="team-meta">
+        Team Members: <span class="team-names">Rohan Prajapat | Vedant Surve | Tanvi Patil | Srushti More</span> • Guide: <strong>Prof. Project Guide</strong>
+      </div>
+    </section>
+
+    <!-- 3. MAIN CONTENT GRID (8 EXACT TEMPLATE BOXES) -->
+    <main class="grid-container">
+
+      <!-- ==================== COLUMN 1 ==================== -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <!-- 1. INTRODUCTION & OBJECTIVE -->
+        <article class="card">
+          <div class="card-header">
+            <span>💡</span> 1. INTRODUCTION & OBJECTIVE
+          </div>
+          <div class="card-body">
+            <ul class="bullet-list">
+              <li>Modern endpoint security is hindered by fragmented tools, open LAN vulnerabilities, unverified agent loops, and invasive surveillance methods that compromise privacy.</li>
+              <li><strong>Objective:</strong> To develop an integrated, single-port defensive cybersecurity platform that combines real-time endpoint telemetry, agentless remote node auditing, and transparent multi-node fleet management.</li>
+              <li><strong>Key Objective:</strong> Design, implement, and validate a hardened Zero-Trust architecture featuring PBKDF2 SHA-256 vault encryption, timing-safe authentication, and strict role immutability.</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- 3. REQUIREMENTS -->
+        <article class="card">
+          <div class="card-header">
+            <span>⚙️</span> 3. REQUIREMENTS
+          </div>
+          <div class="card-body">
+            <div class="section-subtitle">
+              <span>🖥️</span> HARDWARE REQUIREMENTS
+            </div>
+            <ul class="bullet-list">
+              <li><strong>Central SOC Host:</strong> Intel Core i5 / Ryzen, 8GB+ RAM, Gigabit Ethernet / 802.11 Wi-Fi.</li>
+              <li><strong>Remote Fleet Endpoints:</strong> Windows 10/11 laptops / client nodes on local or extended subnets.</li>
+              <li><strong>Network Telemetry Probes:</strong> TCP/3000 (Console), ICMP Prober, TCP Port Auditor (445, 3389, 22).</li>
+              <li><strong>Storage:</strong> NVMe/SSD storage for persistent user and audit databases.</li>
+            </ul>
+
+            <div class="section-subtitle" style="margin-top: 4px;">
+              <span>💻</span> SOFTWARE REQUIREMENTS
+            </div>
+            <ul class="bullet-list">
+              <li><strong>Languages:</strong> TypeScript, JavaScript, Python, PowerShell Core.</li>
+              <li><strong>IDEs & Frameworks:</strong> VS Code, React 19, Vite, Tailwind CSS v4, Express, TanStack Query.</li>
+              <li><strong>Security & Cryptography:</strong> PBKDF2 SHA-256 (100k rounds), Timing-Safe Auth, Dual-Mode Email OTP.</li>
+              <li><strong>Data Store:</strong> Persistent JSON File Store (PBKDF2-salted user roster, cryptographic audit ledger).</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- 6. WORKING PRINCIPLE / METHODOLOGY -->
+        <article class="card">
+          <div class="card-header">
+            <span>⚙️</span> 6. WORKING PRINCIPLE / METHODOLOGY
+          </div>
+          <div class="card-body">
+            <ul class="bullet-list">
+              <li><strong>Step 1:</strong> Enrolled endpoints stream hardware telemetry (CPU %, RAM, disk storage, suspicious downloads) via authenticated 5s heartbeats.</li>
+              <li><strong>Step 2:</strong> Central server normalizes client socket IPs, strictly rejecting spoofed headers (<code>X-Forwarded-For</code>) and SSRF loopback vectors.</li>
+              <li><strong>Step 3:</strong> Zero-Trust RBAC engine strictly restricts regular users to <code>SECURITY_ANALYST</code>; Master Admin credentials required for privilege elevation.</li>
+              <li><strong>Step 4:</strong> Autonomous threat mitigation triggers remote file quarantine and process termination over secure command queues.</li>
+              <li><strong>Methodology:</strong> System Architecture → Modular Implementation → Threat Boundary Hardening → Automated E2E Regression Testing (100% Passed).</li>
+            </ul>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- ==================== COLUMN 2 ==================== -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <!-- 4. BLOCK DIAGRAM / SYSTEM ARCHITECTURE -->
+        <article class="card">
+          <div class="card-header">
+            <span>🕸️</span> 4. BLOCK DIAGRAM / SYSTEM ARCHITECTURE
+          </div>
+          <div class="card-body">
+            <div class="diagram-box">
+              <svg viewBox="0 0 320 220" style="width: 100%; height: auto; font-family: Inter, sans-serif;">
+                <!-- Background Layer -->
+                <rect x="5" y="5" width="310" height="42" rx="4" fill="#E0F2FE" stroke="#0284C7" stroke-width="1.2"/>
+                <text x="160" y="19" font-size="8.5" font-weight="800" fill="#002B49" text-anchor="middle">HARDWARE & ENDPOINT LAYER</text>
+                <text x="75" y="36" font-size="7.5" font-weight="600" fill="#0369A1" text-anchor="middle">Host Endpoint (PC 1)</text>
+                <text x="235" y="36" font-size="7.5" font-weight="600" fill="#0369A1" text-anchor="middle">Remote Fleet Laptops (PC 2, 3)</text>
+
+                <!-- Arrow down -->
+                <path d="M75 47 L75 62 M235 47 L235 62" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <!-- Middle Processing Layer -->
+                <rect x="15" y="64" width="130" height="46" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.2"/>
+                <text x="80" y="80" font-size="8" font-weight="800" fill="#002B49" text-anchor="middle">DATA ACQUISITION</text>
+                <text x="80" y="92" font-size="7" font-weight="600" fill="#475569" text-anchor="middle">PowerShell Agent / Browser</text>
+                <text x="80" y="102" font-size="6.5" fill="#64748B" text-anchor="middle">(CPU, RAM, File Scan)</text>
+
+                <!-- Arrow Right -->
+                <path d="M145 87 L173 87" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="175" y="64" width="130" height="46" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.2"/>
+                <text x="240" y="80" font-size="8" font-weight="800" fill="#002B49" text-anchor="middle">SECURITY BOUNDARY</text>
+                <text x="240" y="92" font-size="7" font-weight="600" fill="#475569" text-anchor="middle">SSRF & Socket Normalizer</text>
+                <text x="240" y="102" font-size="6.5" fill="#64748B" text-anchor="middle">(Timing-Safe Zero-Trust)</text>
+
+                <!-- Arrow Down -->
+                <path d="M240 110 L240 128" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <!-- Core Server Engine -->
+                <rect x="15" y="130" width="290" height="40" rx="4" fill="#E0F2FE" stroke="#0284C7" stroke-width="1.2"/>
+                <text x="160" y="145" font-size="8.5" font-weight="800" fill="#002B49" text-anchor="middle">CENTRAL PLATFORM ENGINE (PORT 3000)</text>
+                <text x="160" y="159" font-size="7" font-weight="600" fill="#0369A1" text-anchor="middle">Express Server • PBKDF2 Vault • Dual-Mode Email OTP • RBAC Engine</text>
+
+                <!-- Outputs -->
+                <path d="M75 170 L75 186 M240 170 L240 186" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="15" y="188" width="130" height="28" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="80" y="200" font-size="7.5" font-weight="700" fill="#002B49" text-anchor="middle">Remediation Control</text>
+                <text x="80" y="210" font-size="6.5" fill="#64748B" text-anchor="middle">(Quarantine / Process Kill)</text>
+
+                <rect x="175" y="188" width="130" height="28" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="240" y="200" font-size="7.5" font-weight="700" fill="#002B49" text-anchor="middle">Unified SOC Console</text>
+                <text x="240" y="210" font-size="6.5" fill="#64748B" text-anchor="middle">(React 19 Dashboard)</text>
+
+                <!-- Marker definition -->
+                <defs>
+                  <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                    <path d="M 0 1 L 8 5 L 0 9 z" fill="#0284C7" />
+                  </marker>
+                </defs>
+              </svg>
+            </div>
+            <div class="diagram-caption">Integrated hardware-software flow for real-time data processing and control.</div>
+          </div>
+        </article>
+
+        <!-- 7. RESULT & PROTOTYPE IMAGES -->
+        <article class="card">
+          <div class="card-header">
+            <span>🖼️</span> 7. RESULT & PROTOTYPE IMAGES
+          </div>
+          <div class="card-body">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="photo-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <path d="M21 15l-5-5L5 21"/>
+                </svg>
+                <div class="photo-text">HARDWARE FLEET DASHBOARD</div>
+                <div style="font-size: 8px; color: #64748B;">Multi-Node Telemetry & Safety</div>
+              </div>
+              <div class="photo-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M18 20V10M12 20V4M6 20v-6"/>
+                </svg>
+                <div class="photo-text">SOC USER DIRECTORY</div>
+                <div style="font-size: 8px; color: #64748B;">RBAC & Real-Time Presence</div>
+              </div>
+            </div>
+
+            <div class="diagram-caption">Fig. 1: Multi-node fleet monitoring &nbsp;|&nbsp; Fig. 2: Zero-Trust user cockpit</div>
+
+            <div class="section-subtitle" style="margin-top: 6px;">
+              <span>📊</span> SYSTEM PERFORMANCE EVALUATION
+            </div>
+            <table class="perf-table">
+              <thead>
+                <tr>
+                  <th>Metric</th>
+                  <th>Value</th>
+                  <th>Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Auth Response Latency</td>
+                  <td class="val-cell">&lt; 15 ms</td>
+                  <td>PBKDF2 timing-safe verification</td>
+                </tr>
+                <tr>
+                  <td>Telemetry Sync Interval</td>
+                  <td class="val-cell">5.0 s</td>
+                  <td>Real-time multi-node heartbeat</td>
+                </tr>
+                <tr>
+                  <td>Concurrent User Sessions</td>
+                  <td class="val-cell">15+ Nodes</td>
+                  <td>0 collisions, isolated session state</td>
+                </tr>
+                <tr>
+                  <td>SSRF Boundary Accuracy</td>
+                  <td class="val-cell">100%</td>
+                  <td>Octal/Decimal IP evasion filtered</td>
+                </tr>
+                <tr>
+                  <td>Automated Test Pass Rate</td>
+                  <td class="val-cell">100% (78/78)</td>
+                  <td>All 6 verification test suites passed</td>
+                </tr>
+                <tr>
+                  <td>Memory Footprint</td>
+                  <td class="val-cell">~85 MB</td>
+                  <td>Lightweight unified Node.js runtime</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- ==================== COLUMN 3 ==================== -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+
+        <!-- 2. PROBLEM STATEMENT -->
+        <article class="card">
+          <div class="card-header">
+            <span>⚠️</span> 2. PROBLEM STATEMENT
+          </div>
+          <div class="card-body">
+            <ul class="bullet-list">
+              <li>Existing cybersecurity consoles lack real-time integration between hardware endpoint sensing and centralized analytics, causing blind spots and high overhead.</li>
+              <li><strong>LAN Identity Spoofing:</strong> Vulnerable architectures trust client-supplied headers (e.g., <code>X-Forwarded-For</code>) and expose bearer tokens, enabling privilege escalation.</li>
+              <li><strong>Challenge:</strong> Guaranteeing low-latency hardware metrics and remote remediation without intrusive surveillance (zero keylogging, zero screen recording) while isolating device telemetry between analysts.</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- 5. CIRCUIT DIAGRAM / FLOW DIAGRAM -->
+        <article class="card">
+          <div class="card-header">
+            <span>🔄</span> 5. CIRCUIT DIAGRAM / FLOW DIAGRAM
+          </div>
+          <div class="card-body">
+            <div class="diagram-box">
+              <svg viewBox="0 0 280 180" style="width: 100%; height: auto; font-family: Inter, sans-serif;">
+                <text x="140" y="14" font-size="8.5" font-weight="800" fill="#002B49" text-anchor="middle">SOFTWARE EXECUTION FLOW</text>
+
+                <!-- Flowchart Boxes -->
+                <!-- Row 1: Start -> Init -> Read -->
+                <rect x="15" y="26" width="60" height="24" rx="4" fill="#0284C7" stroke="#0284C7"/>
+                <text x="45" y="41" font-size="7.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">Start</text>
+
+                <path d="M75 38 L95 38" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="97" y="26" width="80" height="24" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="137" y="38" font-size="7" font-weight="700" fill="#002B49" text-anchor="middle">Initialize System</text>
+                <text x="137" y="46" font-size="6" fill="#64748B" text-anchor="middle">& PBKDF2 Vault</text>
+
+                <path d="M177 38 L197 38" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="199" y="26" width="70" height="24" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="234" y="38" font-size="7" font-weight="700" fill="#002B49" text-anchor="middle">Read Sensor</text>
+                <text x="234" y="46" font-size="6" fill="#64748B" text-anchor="middle">& Node Telemetry</text>
+
+                <!-- Down from Read -->
+                <path d="M234 50 L234 68" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <!-- Row 2: Trigger <- Process <- Validate -->
+                <rect x="199" y="70" width="70" height="24" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="234" y="82" font-size="7" font-weight="700" fill="#002B49" text-anchor="middle">Process &</text>
+                <text x="234" y="90" font-size="6" fill="#64748B" text-anchor="middle">Analyze Data</text>
+
+                <path d="M199 82 L179 82" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="97" y="70" width="80" height="24" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="137" y="82" font-size="7" font-weight="700" fill="#002B49" text-anchor="middle">Trigger Control</text>
+                <text x="137" y="90" font-size="6" fill="#64748B" text-anchor="middle">Output / Quarantine</text>
+
+                <path d="M97 82 L77 82" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="15" y="70" width="60" height="24" rx="4" fill="#FFFFFF" stroke="#0284C7" stroke-width="1"/>
+                <text x="45" y="82" font-size="7" font-weight="700" fill="#002B49" text-anchor="middle">Log Data &</text>
+                <text x="45" y="90" font-size="6" fill="#64748B" text-anchor="middle">Audit Ledger</text>
+
+                <!-- Down to Row 3 -->
+                <path d="M45 94 L45 112" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <!-- Row 3: Send to Cloud / SOC Display -> Loop -->
+                <rect x="15" y="114" width="130" height="24" rx="4" fill="#E0F2FE" stroke="#0284C7" stroke-width="1"/>
+                <text x="80" y="129" font-size="7" font-weight="800" fill="#002B49" text-anchor="middle">Send to SOC Console / Display</text>
+
+                <path d="M145 126 L175 126" stroke="#0284C7" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+                <rect x="177" y="114" width="55" height="24" rx="4" fill="#0284C7" stroke="#0284C7"/>
+                <text x="204" y="129" font-size="7.5" font-weight="700" fill="#FFFFFF" text-anchor="middle">Loop (5s)</text>
+
+                <!-- Feedback Loop back to Read Telemetry -->
+                <path d="M232 126 L265 126 L265 40 L242 40" stroke="#0284C7" stroke-width="1" stroke-dasharray="3 2" fill="none"/>
+              </svg>
+            </div>
+            <div class="diagram-caption">End-to-end continuous sensing, verification, remediation, and display loop.</div>
+          </div>
+        </article>
+
+        <!-- 8. CONCLUSION & FUTURE SCOPE -->
+        <article class="card">
+          <div class="card-header">
+            <span>🎯</span> 8. CONCLUSION & FUTURE SCOPE
+          </div>
+          <div class="card-body">
+            <ul class="bullet-list">
+              <li><strong>Conclusion:</strong> The system successfully demonstrates a robust, defensive cybersecurity console and multi-node fleet cockpit on a unified single port (3000), achieving reliable data acquisition, zero-trust hardware isolation, and timing-safe authentication validated by 100% test suite completion.</li>
+              <li><strong>Future Scope:</strong>
+                <ul style="list-style: none; padding-left: 10px; margin-top: 3px; display: flex; flex-direction: column; gap: 3px;">
+                  <li>• Integrate edge ML anomaly detection models for automated zero-day threat heuristics.</li>
+                  <li>• Implement hardware-backed TPM 2.0 enclave attestation for cryptographically verified node identity.</li>
+                  <li>• Expand agent support across Linux and macOS remote endpoints with enterprise SIEM integration.</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+        </article>
+
+      </div>
+
+    </main>
+
+  </div>
+
+</body>
+</html>

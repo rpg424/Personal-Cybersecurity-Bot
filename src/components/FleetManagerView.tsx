@@ -75,6 +75,14 @@ export const FleetManagerView: React.FC = () => {
     setTimeout(() => setCopiedPairingLink(false), 2500);
   };
 
+  const [copiedFw, setCopiedFw] = useState(false);
+  const fwCmd = 'netsh advfirewall firewall add rule name="Shield Labs Bot Port 3000" dir=in action=allow protocol=TCP localport=3000';
+  const copyFwCmd = () => {
+    navigator.clipboard.writeText(fwCmd);
+    setCopiedFw(true);
+    setTimeout(() => setCopiedFw(false), 2500);
+  };
+
   const copyScriptCmd = (cmd: string) => {
     navigator.clipboard.writeText(cmd);
     setCopiedScript(true);
@@ -85,6 +93,16 @@ export const FleetManagerView: React.FC = () => {
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
+  const syncNodeState = async (nodeId: string) => {
+    const qRes = await refetch();
+    if (qRes.data?.nodes) {
+      const match = qRes.data.nodes.find((n) => n.id === nodeId || n.hostname.toLowerCase() === nodeId.toLowerCase());
+      if (match && selectedNode) {
+        setSelectedNode(match);
+      }
+    }
+  };
+
   const handleScanFiles = async (nodeId: string) => {
     const actionKey = `scan-${nodeId}`;
     setActionInProgress(actionKey);
@@ -92,7 +110,7 @@ export const FleetManagerView: React.FC = () => {
       const res = await api.scanFleetFiles(nodeId);
       setActionFeedback(res.message || `Scanned ${res.scannedFilesCount} items. ${res.threatsFound?.length || 0} threats found.`);
       setTimeout(() => setActionFeedback(null), 4000);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Scan failed: ${err.message || 'Unknown error'}`);
     } finally {
@@ -112,7 +130,7 @@ export const FleetManagerView: React.FC = () => {
       });
       setActionFeedback(`File "${threat.fileName || 'file'}" blocked on remote laptop.`);
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to block file: ${err.message || 'Unknown error'}`);
     } finally {
@@ -132,7 +150,7 @@ export const FleetManagerView: React.FC = () => {
       setManualFileInput('');
       setActionFeedback(`File added to blacklist.`);
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to block file: ${err.message || 'Unknown error'}`);
     } finally {
@@ -148,7 +166,7 @@ export const FleetManagerView: React.FC = () => {
       await api.blockFleetDomain(nodeId, { domain: domain.trim() });
       setActionFeedback(`Domain "${domain}" blocked on network firewall.`);
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to block website: ${err.message || 'Unknown error'}`);
     } finally {
@@ -162,8 +180,17 @@ export const FleetManagerView: React.FC = () => {
     try {
       await api.unblockFleetDomain(nodeId, { domain });
       setActionFeedback(`Domain "${domain}" unblocked.`);
+      if (selectedNode && selectedNode.id === nodeId) {
+        setSelectedNode({
+          ...selectedNode,
+          blockedDomains: (selectedNode.blockedDomains || []).filter((d) => d.toLowerCase() !== domain.toLowerCase()),
+          allowedDomains: [...(selectedNode.allowedDomains || []), domain.toLowerCase()],
+          activeBrowserVerdict: 'SAFE',
+          activeBrowserRiskScore: 0,
+        });
+      }
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to unblock website: ${err.message || 'Unknown error'}`);
     } finally {
@@ -182,7 +209,7 @@ export const FleetManagerView: React.FC = () => {
       });
       setActionFeedback(`Quarantine order queued for ${threat.fileName || 'file'}`);
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to queue quarantine: ${err.message || 'Unknown error'}`);
     } finally {
@@ -203,8 +230,23 @@ export const FleetManagerView: React.FC = () => {
         fileName: threat.fileName,
       });
       setActionFeedback(`File deletion command dispatched for ${threat.fileName || 'file'}`);
+      if (selectedNode && selectedNode.id === nodeId) {
+        const remaining = (selectedNode.harmfulThreats || []).filter(
+          (t) => t.id !== threat.id && t.fileName !== threat.fileName
+        );
+        setSelectedNode({
+          ...selectedNode,
+          harmfulThreats: remaining,
+          blockedFiles: (selectedNode.blockedFiles || []).filter(
+            (f) => f.toLowerCase() !== (threat.fileName || '').toLowerCase()
+          ),
+          harmfulFilesDetected: remaining.filter((t) => t.status !== 'blocked').length,
+          safetyVerdict: remaining.filter((t) => t.status !== 'blocked').length === 0 ? 'SECURE & HEALTHY' : selectedNode.safetyVerdict,
+          safetyScore: remaining.filter((t) => t.status !== 'blocked').length === 0 ? 100 : selectedNode.safetyScore,
+        });
+      }
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to delete file: ${err.message || 'Unknown error'}`);
     } finally {
@@ -223,7 +265,7 @@ export const FleetManagerView: React.FC = () => {
       });
       setActionFeedback(`Process termination order queued for PID ${threat.pid || threat.processName}`);
       setTimeout(() => setActionFeedback(null), 3500);
-      refetch();
+      await syncNodeState(nodeId);
     } catch (err: any) {
       alert(`Failed to kill process: ${err.message || 'Unknown error'}`);
     } finally {
@@ -1090,6 +1132,14 @@ export const FleetManagerView: React.FC = () => {
                     </p>
                     <div className="flex items-center gap-2 pt-1 flex-wrap">
                       <button
+                        onClick={() => handleScanFiles(activeModalNode.id)}
+                        disabled={actionInProgress === `scan-${activeModalNode.id}`}
+                        className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${actionInProgress === `scan-${activeModalNode.id}` ? 'animate-spin' : ''}`} />
+                        Run Deep Audit & Load Specs
+                      </button>
+                      <button
                         onClick={copyPairingLink}
                         className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-amber-300 rounded text-amber-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
                       >
@@ -1747,14 +1797,19 @@ export const FleetManagerView: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-700">
-                Command to run in Windows PowerShell on the second user's laptop:
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Command to run on the second user's laptop:
+                </label>
+                <span className="text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  ⚡ Open as Administrator
+                </span>
+              </div>
               <div className="bg-slate-900 rounded-lg p-3 space-y-2 font-mono text-xs text-slate-200">
                 <div className="flex items-center justify-between text-slate-400 text-[10px] pb-1 border-b border-slate-800">
                   <span className="flex items-center gap-1.5 text-slate-300">
                     <Terminal className="w-3 h-3 text-emerald-400" />
-                    Windows PowerShell
+                    Windows PowerShell (Administrator)
                   </span>
                   <button
                     onClick={() => copyScriptCmd(agentScriptData?.powershellOneLiner || `irm ${pairingLink.replace('/join', '')}/api/v1/fleet/agent-script/raw | iex`)}
@@ -1767,6 +1822,30 @@ export const FleetManagerView: React.FC = () => {
                 <div className="text-emerald-400 break-all select-all py-1">
                   {agentScriptData?.powershellOneLiner || `irm ${pairingLink.replace('/join', '')}/api/v1/fleet/agent-script/raw | iex`}
                 </div>
+              </div>
+            </div>
+
+            {/* The Open Gate: Windows Firewall Helper */}
+            <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 space-y-1.5 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-blue-950 flex items-center gap-1.5">
+                  <Wifi className="w-3.5 h-3.5 text-blue-600" />
+                  Remote Laptop Can't Connect? (The Open Gate)
+                </span>
+                <button
+                  onClick={copyFwCmd}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-medium text-[10px] transition-colors shadow-2xs"
+                >
+                  {copiedFw ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                  {copiedFw ? 'Copied!' : 'Copy Host Rule'}
+                </button>
+              </div>
+              <p className="text-blue-900 leading-relaxed">
+                Windows Defender Firewall on this primary PC might block incoming Port 3000 connections from other Wi-Fi devices.
+                Run this command once on <strong>THIS PC</strong> in PowerShell (Run as Administrator) to allow other laptops through:
+              </p>
+              <div className="bg-slate-900 text-emerald-400 font-mono text-[10px] p-2 rounded break-all select-all">
+                {fwCmd}
               </div>
             </div>
 

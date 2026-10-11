@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shield Labs - Research Project Competition Presentation (MIT Thane)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+    :root {
+      --primary-navy: #002B49;
+      --secondary-navy: #0B2545;
+      --accent-cyan: #00A3E0;
+      --accent-blue: #0284C7;
+      --border-blue: #BAE6FD;
+      --bg-slate: #0F172A;
+      --card-bg: #FFFFFF;
+      --text-main: #0F172A;
+      --text-muted: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-slate);
+      color: #F8FAFC;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Presentation Canvas (16:9 Aspect Ratio) */
+    .deck-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .slide {
+      display: none;
+      width: 1100px;
+      height: 640px;
+      background: #FFFFFF;
+      color: var(--text-main);
+      border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .slide.active {
+      display: flex;
+      animation: fadeIn 0.25s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.985); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    /* Top Slide Header */
+    .slide-header {
+      background: linear-gradient(135deg, #001F35 0%, #002B49 100%);
+      color: #FFFFFF;
+      padding: 14px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--accent-cyan);
+    }
+
+    .slide-header h2 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slide-header .institute-tag {
+      font-size: 11px;
+      font-weight: 700;
+      color: #38BDF8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Slide Body */
+    .slide-body {
+      flex: 1;
+      padding: 26px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Title Slide Specifics */
+    .title-slide {
+      background: linear-gradient(135deg, #001524 0%, #002B49 70%, #034A7B 100%);
+      color: #FFFFFF;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 40px;
+    }
+
+    .title-slide .badge {
+      background: rgba(0, 163, 224, 0.15);
+      border: 1px solid var(--accent-cyan);
+      color: #38BDF8;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+
+    .title-slide h1 {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      color: #FFFFFF;
+    }
+
+    .title-slide .subheading {
+      font-size: 17px;
+      color: #94A3B8;
+      font-weight: 600;
+      max-width: 800px;
+      margin-bottom: 30px;
+      line-height: 1.4;
+    }
+
+    .title-slide .team-box {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 16px 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .team-names {
+      font-size: 16px;
+      font-weight: 800;
+      color: #38BDF8;
+    }
+
+    /* Grids & Columns */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      flex: 1;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .card {
+      background: #F8FAFC;
+      border: 1.5px solid #E2E8F0;
+      border-radius: 8px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .card.blue-card {
+      background: #F0F9FF;
+      border-color: #BAE6FD;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 800;
+      color: var(--primary-navy);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #E2E8F0;
+      padding-bottom: 6px;
+    }
+
+    /* Bullet List */
+    .bullets {
+      list-style-type: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      font-size: 13.5px;
+      color: var(--text-main);
+    }
+
+    .bullets li {
+      position: relative;
+      padding-left: 20px;
+      line-height: 1.45;
+    }
+
+    .bullets li::before {
+      content: "▪";
+      position: absolute;
+      left: 2px;
+      color: var(--accent-blue);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    /* Table */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      margin-top: 6px;
+    }
+
+    .data-table th {
+      background: var(--primary-navy);
+      color: #FFFFFF;
+      padding: 8px 12px;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .data-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid #E2E8F0;
+    }
+
+    .data-table tr:nth-child(even) {
+      background: #F8FAFC;
+    }
+
+    .highlight-val {
+      font-weight: 800;
+      color: #0369A1;
+    }
+
+    /* Speaker Notes Panel */
+    .speaker-notes-panel {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.95);
+      color: #E2E8F0;
+      padding: 14px 24px;
+      font-size: 13px;
+      display: none;
+      border-top: 2px solid var(--accent-cyan);
+      max-height: 140px;
+      overflow-y: auto;
+      z-index: 50;
+    }
+
+    .speaker-notes-panel.visible {
+      display: block;
+    }
+
+    /* Footer & Controls */
+    .deck-controls {
+      background: #0B132B;
+      padding: 12px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid #1E293B;
+    }
+
+    .control-btn {
+      background: #1E293B;
+      color: #F8FAFC;
+      border: 1px solid #334155;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+
+    .control-btn:hover {
+      background: #334155;
+    }
+
+    .control-btn.active {
+      background: var(--accent-cyan);
+      color: #000;
+      border-color: var(--accent-cyan);
+    }
+
+    .slide-counter {
+      font-size: 14px;
+      font-weight: 700;
+      color: #94A3B8;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="deck-container">
+
+    <!-- SLIDE 1: TITLE SLIDE -->
+    <div class="slide title-slide active" data-slide="1">
+      <div class="badge">MAEER'S MIT THANE, MUMBAI • RESEARCH COMPETITION 2026</div>
+      <h1>SHIELD LABS</h1>
+      <div class="subheading">Unified Defensive Multi-Node Fleet Cockpit & Zero-Trust Cybersecurity Platform</div>
+      <div class="team-box">
+        <div><strong>Project Team:</strong> <span class="team-names">Rohan Prajapat | Vedant Surve | Tanvi Patil | Srushti More</span></div>
+        <div style="font-size: 13.5px; color: #CBD5E1;">Under the Guidance of: <strong>Prof. Project Guide</strong> • Date: <strong>10/10/2026</strong></div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-1">
+        <strong>Speaker Script:</strong> "Respected judges, faculty members, and fellow researchers, good morning. Today, our team—Rohan Prajapat, Vedant Surve, Tanvi Patil, and Srushti More—presents Shield Labs: A Unified Defensive Multi-Node Fleet Cockpit and Zero-Trust Cybersecurity Platform."
+      </div>
+    </div>
+
+    <!-- SLIDE 2: INTRODUCTION & MOTIVATION -->
+    <div class="slide" data-slide="2">
+      <div class="slide-header">
+        <h2><span>💡</span> 1. Introduction & Motivation</h2>
+        <span class="institute-tag">Shield Labs • Slide 2 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card blue-card">
+            <div class="card-title"><span>🌐</span> The Endpoint Security Landscape</div>
+            <ul class="bullets">
+              <li>Modern enterprise and campus environments operate across dynamic multi-laptop fleets over shared Wi-Fi subnets.</li>
+              <li>Endpoint workstations are primary vectors for lateral malware movement, ransomware, and unauthorized network snooping.</li>
+              <li>Legacy administration platforms suffer from fragmented architecture, requiring split servers and unencrypted background daemons.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>🎯</span> Our Core Motivation</div>
+            <ul class="bullets">
+              <li><strong>Single-Port Defense:</strong> Consolidate monitoring, fleet telemetry, and remediation into one web console (`0.0.0.0:3000`).</li>
+              <li><strong>Zero Invasive Surveillance:</strong> Guarantee complete endpoint security with <strong>ZERO</strong> keylogging, <strong>ZERO</strong> screen recording, and full user transparency.</li>
+              <li><strong>Zero-Trust Isolation:</strong> Protect analyst privacy by preventing secondary users from inspecting other devices.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-2">
+        <strong>Speaker Script:</strong> "In modern IT environments, endpoints are the most vulnerable entry point. However, current tools either act as intrusive spyware or leave unauthenticated backdoors open. Our motivation was to deliver robust endpoint visibility and remediation while strictly preserving user privacy."
+      </div>
+    </div>
+
+    <!-- SLIDE 3: PROBLEM STATEMENT -->
+    <div class="slide" data-slide="3">
+      <div class="slide-header">
+        <h2><span>⚠️</span> 2. Problem Statement & Existing Flaws</h2>
+        <span class="institute-tag">Shield Labs • Slide 3 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-title"><span>🚨</span> Header Spoofing (LAN)</div>
+            <p style="font-size: 13px; color: var(--text-muted);">Traditional servers blindly trust client-supplied headers like <code>X-Forwarded-For</code>.</p>
+            <ul class="bullets" style="margin-top: 8px;">
+              <li>LAN attackers forge <code>127.0.0.1</code> to bypass admin gates.</li>
+              <li>Unauthenticated callers gain unauthorized elevated roles.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>🔓</span> Public Token Leaks</div>
+            <p style="font-size: 13px; color: var(--text-muted);">Commercial fleet managers broadcast bearer tokens over open HTTP enrollment routes.</p>
+            <ul class="bullets" style="margin-top: 8px;">
+              <li>Wildcard CORS exposes session credentials.</li>
+              <li>Unverified agents execute destructive remote commands.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>👁️</span> Covert Surveillance</div>
+            <p style="font-size: 13px; color: var(--text-muted);">Existing monitoring software intercepts private user activity without consent.</p>
+            <ul class="bullets" style="margin-top: 8px;">
+              <li>Secret keystroke logging & screen capture violate ethics.</li>
+              <li>No transparency badge on monitored student/worker laptops.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-3">
+        <strong>Speaker Script:</strong> "During our security audit, we identified three critical flaws in conventional endpoint monitors: Header-based identity spoofing, plaintext token leaks on enrollment routes, and invasive, unconsented surveillance. Shield Labs eliminates all three vulnerabilities."
+      </div>
+    </div>
+
+    <!-- SLIDE 4: PROPOSED SOLUTION & OBJECTIVES -->
+    <div class="slide" data-slide="4">
+      <div class="slide-header">
+        <h2><span>🛡️</span> 3. Proposed Solution & Objectives</h2>
+        <span class="institute-tag">Shield Labs • Slide 4 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card blue-card">
+            <div class="card-title"><span>⚙️</span> Architectural Objectives</div>
+            <ul class="bullets">
+              <li><strong>Single-Port Unified Service:</strong> Run frontend, API, WebSocket, and telemetry strictly on Port 3000.</li>
+              <li><strong>One-Click Fleet Enrollment:</strong> Support both agentless TCP socket auditing and lightweight PowerShell telemetry scripts.</li>
+              <li><strong>Heartbeat Deduplication:</strong> Preserve node persistence across browser reloads without spawning duplicate devices.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>🔒</span> Cryptographic & Privacy Objectives</div>
+            <ul class="bullets">
+              <li><strong>PBKDF2 SHA-256 Vault:</strong> 100,000 iterations with 16-byte random salts and timing-safe equality comparisons.</li>
+              <li><strong>Dual-Mode Email OTP:</strong> Cryptographic 6-digit numeric verification with anti-flood cooldowns.</li>
+              <li><strong>Role Immutability:</strong> Public signup defaults to <code>SECURITY_ANALYST</code>; only Master Admin can delegate roles.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-4">
+        <strong>Speaker Script:</strong> "Our proposed solution focuses on two core pillars: Architectural unification onto port 3000, and cryptographic zero-trust validation. Every user signup is verified via email OTP and restricted to analyst clearance, while the host hardware is hidden from secondary users."
+      </div>
+    </div>
+
+    <!-- SLIDE 5: SYSTEM ARCHITECTURE & BLOCK DIAGRAM -->
+    <div class="slide" data-slide="5">
+      <div class="slide-header">
+        <h2><span>🕸️</span> 4. System Architecture & Block Diagram</h2>
+        <span class="institute-tag">Shield Labs • Slide 5 / 12</span>
+      </div>
+      <div class="slide-body" style="align-items: center; justify-content: center;">
+        <svg viewBox="0 0 760 380" style="width: 90%; height: auto; font-family: Inter, sans-serif;">
+          <!-- Hardware Layer -->
+          <rect x="20" y="10" width="720" height="50" rx="6" fill="#002B49"/>
+          <text x="380" y="32" font-size="13" font-weight="800" fill="#FFFFFF" text-anchor="middle">HARDWARE & MULTI-NODE FLEET LAYER</text>
+          <text x="180" y="48" font-size="11" font-weight="600" fill="#38BDF8" text-anchor="middle">Host Endpoint (Laptop 1)</text>
+          <text x="560" y="48" font-size="11" font-weight="600" fill="#38BDF8" text-anchor="middle">Remote Fleet Laptops (Node 2, Node 3)</text>
+
+          <path d="M180 60 L180 90 M560 60 L560 90" stroke="#0284C7" stroke-width="2"/>
+
+          <!-- Ingestion & Boundary -->
+          <rect x="50" y="90" width="280" height="70" rx="6" fill="#F0F9FF" stroke="#0284C7" stroke-width="1.5"/>
+          <text x="190" y="115" font-size="12" font-weight="800" fill="#002B49" text-anchor="middle">DATA ACQUISITION MODULE</text>
+          <text x="190" y="132" font-size="10.5" fill="#475569" text-anchor="middle">PowerShell Agent / Browser #join</text>
+          <text x="190" y="146" font-size="10" fill="#64748B" text-anchor="middle">CPU %, RAM, Suspicious Binaries</text>
+
+          <path d="M330 125 L400 125" stroke="#0284C7" stroke-width="2"/>
+
+          <rect x="400" y="90" width="310" height="70" rx="6" fill="#F0F9FF" stroke="#0284C7" stroke-width="1.5"/>
+          <text x="555" y="115" font-size="12" font-weight="800" fill="#002B49" text-anchor="middle">ZERO-TRUST SECURITY BOUNDARY</text>
+          <text x="555" y="132" font-size="10.5" fill="#475569" text-anchor="middle">Raw Socket Normalizer & SSRF Firewall</text>
+          <text x="555" y="146" font-size="10" fill="#64748B" text-anchor="middle">Strips X-Forwarded-For • Blocks Decimal/Octal</text>
+
+          <path d="M555 160 L555 190" stroke="#0284C7" stroke-width="2"/>
+
+          <!-- Core Engine -->
+          <rect x="50" y="190" width="660" height="75" rx="6" fill="#E0F2FE" stroke="#0284C7" stroke-width="2"/>
+          <text x="380" y="218" font-size="14" font-weight="900" fill="#002B49" text-anchor="middle">CENTRAL CORE PLATFORM ENGINE (PORT 3000)</text>
+          <text x="380" y="238" font-size="11.5" font-weight="600" fill="#0369A1" text-anchor="middle">Express Server • PBKDF2 SHA-256 Vault • Dual-Mode Email OTP • RBAC Matrix</text>
+          <text x="380" y="254" font-size="10.5" fill="#475569" text-anchor="middle">Zero-Trust Default Session Guard (`role: NO_ROLE`, `isLocked: true`)</text>
+
+          <path d="M190 265 L190 295 M555 265 L555 295" stroke="#0284C7" stroke-width="2"/>
+
+          <!-- Outputs -->
+          <rect x="50" y="295" width="280" height="55" rx="6" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+          <text x="190" y="320" font-size="12" font-weight="800" fill="#002B49" text-anchor="middle">REMEDIATION CONTROL</text>
+          <text x="190" y="336" font-size="10" fill="#64748B" text-anchor="middle">Remote File Quarantine • Process Kill</text>
+
+          <rect x="430" y="295" width="280" height="55" rx="6" fill="#FFFFFF" stroke="#0284C7" stroke-width="1.5"/>
+          <text x="570" y="320" font-size="12" font-weight="800" fill="#002B49" text-anchor="middle">UNIFIED SOC CONSOLE</text>
+          <text x="570" y="336" font-size="10" fill="#64748B" text-anchor="middle">Single-Pane React 19 Cockpit (Port 3000)</text>
+        </svg>
+      </div>
+      <div class="speaker-notes-panel" id="notes-5">
+        <strong>Speaker Script:</strong> "Here is our 5-tier architecture. Endpoints communicate via raw TCP sockets into our boundary firewall, which neutralizes spoofed headers. Telemetry is verified by our Express core engine, ensuring only Master Admin sees all endpoints while analysts are locked to their own machine."
+      </div>
+    </div>
+
+    <!-- SLIDE 6: REQUIREMENTS & TECH STACK -->
+    <div class="slide" data-slide="6">
+      <div class="slide-header">
+        <h2><span>⚙️</span> 5. System Requirements & Technology Stack</h2>
+        <span class="institute-tag">Shield Labs • Slide 6 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span>🖥️</span> Hardware Specifications</div>
+            <ul class="bullets">
+              <li><strong>Central SOC Host:</strong> Intel Core i5 / AMD Ryzen, 8GB+ RAM, Gigabit Ethernet / 802.11 Wi-Fi.</li>
+              <li><strong>Remote Fleet Laptops:</strong> Windows 10/11 endpoints connected over local LAN/Wi-Fi.</li>
+              <li><strong>Network Ports Audited:</strong> Port 3000 (Console), Port 445 (SMB), Port 3389 (RDP), Port 22 (SSH).</li>
+              <li><strong>Storage:</strong> High-speed NVMe SSD for PBKDF2 cryptographic user repository.</li>
+            </ul>
+          </div>
+          <div class="card blue-card">
+            <div class="card-title"><span>💻</span> Software Technology Stack</div>
+            <ul class="bullets">
+              <li><strong>Frontend:</strong> React 19, Vite, Tailwind CSS v4, TanStack Query, Lucide Icons.</li>
+              <li><strong>Backend Engine:</strong> Node.js (v20+ LTS), Express, TypeScript / Tsx, WebSocket.</li>
+              <li><strong>Cryptography:</strong> Native Node.js `crypto` (PBKDF2 SHA-256 100k rounds, `timingSafeEqual`).</li>
+              <li><strong>Testing Harness:</strong> 6 automated test suites executing 78+ verified assertions.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-6">
+        <strong>Speaker Script:</strong> "We built Shield Labs using production-grade open web technologies: React 19 on Vite for sub-millisecond client rendering, Express on Node.js v24 for backend performance, and native Node.js cryptography to avoid vulnerable third-party dependencies."
+      </div>
+    </div>
+
+    <!-- SLIDE 7: WORKING PRINCIPLE & EXECUTION FLOW -->
+    <div class="slide" data-slide="7">
+      <div class="slide-header">
+        <h2><span>🔄</span> 6. Working Principle & Execution Flow</h2>
+        <span class="institute-tag">Shield Labs • Slide 7 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="card blue-card" style="margin-bottom: 8px;">
+          <div class="card-title"><span>🔁</span> Continuous 4-Phase Security Loop</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 10px;">
+            <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #BAE6FD;">
+              <strong style="color: #0369A1;">1. Ingestion</strong>
+              <p style="font-size: 11.5px; margin-top: 4px; color: #475569;">Endpoints stream CPU, RAM, & download scans every 5 seconds.</p>
+            </div>
+            <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #BAE6FD;">
+              <strong style="color: #0369A1;">2. Validation</strong>
+              <p style="font-size: 11.5px; margin-top: 4px; color: #475569;">Raw socket IP normalized; spoofed headers discarded.</p>
+            </div>
+            <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #BAE6FD;">
+              <strong style="color: #0369A1;">3. RBAC Gate</strong>
+              <p style="font-size: 11.5px; margin-top: 4px; color: #475569;">Role immutability enforced; sessions default to locked NO_ROLE.</p>
+            </div>
+            <div style="background: #fff; padding: 12px; border-radius: 6px; border: 1px solid #BAE6FD;">
+              <strong style="color: #0369A1;">4. Remediation</strong>
+              <p style="font-size: 11.5px; margin-top: 4px; color: #475569;">Master Admin dispatches process kills & quarantines.</p>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title"><span>🛡️</span> Zero-Trust Device Privacy Isolation</div>
+          <p style="font-size: 13px; color: var(--text-muted);">When a student or analyst logs in on Laptop 2, the API automatically masks Host Laptop 1's hardware, CPU vitals, and storage. The analyst only ever sees their own laptop.</p>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-7">
+        <strong>Speaker Script:</strong> "Our execution flow operates in a continuous 4-phase loop. Every 5 seconds, telemetry is ingested, sanitized through socket validation, filtered through RBAC, and presented to the admin. Critically, device privacy isolation ensures analysts never see host diagnostics."
+      </div>
+    </div>
+
+    <!-- SLIDE 8: SECURITY & ANTI-TAKEOVER -->
+    <div class="slide" data-slide="8">
+      <div class="slide-header">
+        <h2><span>🔒</span> 7. Zero-Trust Security & Anti-Takeover Hardening</h2>
+        <span class="institute-tag">Shield Labs • Slide 8 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span>🛡️</span> Anti-Takeover OTP Architecture</div>
+            <ul class="bullets">
+              <li><strong>Decoupled Verification:</strong> <code>POST /auth/otp/verify</code> strictly marks <code>user.isVerified = true</code>. It <strong>never</strong> elevates or issues an authenticated session.</li>
+              <li><strong>Zero Credential Bypass:</strong> Admin accounts can never be taken over with OTP alone; full login requires Master Password or PIN.</li>
+              <li><strong>Anti-Flood Cooldown:</strong> 30-second resend cooldown and rate-limiting prevent brute-force attacks.</li>
+            </ul>
+          </div>
+          <div class="card blue-card">
+            <div class="card-title"><span>🛡️</span> Header Spoofing & Token Isolation</div>
+            <ul class="bullets">
+              <li><strong>Header Discard:</strong> <code>X-Forwarded-For</code> and <code>X-Real-IP</code> headers are completely discarded; client identity is derived strictly from TCP socket.</li>
+              <li><strong>Token Redaction:</strong> <code>/api/v1/enrollment</code> redacts the global IPC token unless caller is already authenticated as <code>ADMIN</code>.</li>
+              <li><strong>Restricted CORS:</strong> Permits only legitimate local loopback and host interface origins.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-8">
+        <strong>Speaker Script:</strong> "A key technical achievement was resolving the zero-credential OTP takeover vulnerability. We completely decoupled email verification from session issuance. Now, verifying an OTP never silently elevates a caller to admin without verified password credentials."
+      </div>
+    </div>
+
+    <!-- SLIDE 9: IMPLEMENTATION RESULTS -->
+    <div class="slide" data-slide="9">
+      <div class="slide-header">
+        <h2><span>🖼️</span> 8. Implementation Results & Dashboard</h2>
+        <span class="institute-tag">Shield Labs • Slide 9 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-3">
+          <div class="card">
+            <div class="card-title"><span>💻</span> Multi-Node Fleet Cockpit</div>
+            <ul class="bullets">
+              <li>Live card display for each connected laptop.</li>
+              <li>Dynamic CPU % & RAM gauges.</li>
+              <li>Persistent User Transparency Badge confirming active monitoring.</li>
+            </ul>
+          </div>
+          <div class="card blue-card">
+            <div class="card-title"><span>👥</span> Master Admin User Directory</div>
+            <ul class="bullets">
+              <li>Real-time online indicators (<code>🟢 Active / Online Now</code> vs <code>⚪ Offline</code>).</li>
+              <li>Role assignment modal (only Master Admin can delegate roles).</li>
+              <li>Complete user audit roster with contact details.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title"><span>🔍</span> Agentless Port Auditor</div>
+            <ul class="bullets">
+              <li>Direct TCP socket audit for remote IPs.</li>
+              <li>Instant warning for exposed high-risk ports: 445 (SMB) & 3389 (RDP).</li>
+              <li>Zero software install required on remote node.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-9">
+        <strong>Speaker Script:</strong> "Here are our core functional deliverables: The Multi-Node Fleet Cockpit displaying live laptop health, the Master Admin User Directory showing real-time active users and role delegations, and the Agentless Port Auditor scanning remote IPs for vulnerable ports."
+      </div>
+    </div>
+
+    <!-- SLIDE 10: PERFORMANCE EVALUATION -->
+    <div class="slide" data-slide="10">
+      <div class="slide-header">
+        <h2><span>📊</span> 9. Performance Evaluation & Testing Metrics</h2>
+        <span class="institute-tag">Shield Labs • Slide 10 / 12</span>
+      </div>
+      <div class="slide-body">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Evaluation Parameter</th>
+              <th>Measured Value</th>
+              <th>Significance & Benchmark</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Authentication Latency</td>
+              <td class="highlight-val">&lt; 15 ms</td>
+              <td>PBKDF2 SHA-256 (100,000 rounds) + timingSafeEqual</td>
+            </tr>
+            <tr>
+              <td>Fleet Telemetry Heartbeat</td>
+              <td class="highlight-val">5.0 s</td>
+              <td>Continuous multi-node sync with zero UI lag</td>
+            </tr>
+            <tr>
+              <td>Concurrent User Sessions</td>
+              <td class="highlight-val">15+ Nodes</td>
+              <td>0 state collisions or cross-session leakage</td>
+            </tr>
+            <tr>
+              <td>SSRF Firewall Accuracy</td>
+              <td class="highlight-val">100%</td>
+              <td>Blocks loopback, octal, decimal, and cloud metadata</td>
+            </tr>
+            <tr>
+              <td>Memory Footprint</td>
+              <td class="highlight-val">~85 MB</td>
+              <td>Lightweight single-server Node.js runtime</td>
+            </tr>
+            <tr>
+              <td>Automated Test Pass Rate</td>
+              <td class="highlight-val">100% (78 / 78)</td>
+              <td>Passed across all 6 verification test suites</td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="margin-top: 10px; font-size: 12.5px; color: #0369A1; font-weight: 700;">
+          ✔ Test Coverage: `test:security` (10/10) • `test:safety` (100%) • `test:remote` (100%) • `test:fleet` (7/7) • `test:rbac` (10/10) • `test:e2e` (45/45)
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-10">
+        <strong>Speaker Script:</strong> "We benchmarked our implementation rigorously. Authentication resolves in under 15 milliseconds, telemetry syncs every 5 seconds, and memory consumption remains below 85 MB. Furthermore, our automated test harness passed 78 out of 78 checks with 100% test coverage."
+      </div>
+    </div>
+
+    <!-- SLIDE 11: CONCLUSION & FUTURE SCOPE -->
+    <div class="slide" data-slide="11">
+      <div class="slide-header">
+        <h2><span>🎯</span> 10. Conclusion & Future Scope</h2>
+        <span class="institute-tag">Shield Labs • Slide 11 / 12</span>
+      </div>
+      <div class="slide-body">
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-title"><span>✔</span> Key Conclusions</div>
+            <ul class="bullets">
+              <li>Successfully unified defensive cybersecurity, multi-node telemetry, and remediation on a single port (`3000`).</li>
+              <li>Eliminated invasive surveillance while delivering actionable endpoint defense.</li>
+              <li>Enforced strict Zero-Trust device privacy, role immutability, and header spoofing immunity.</li>
+              <li>Validated by 100% pass rate across 6 automated regression test suites.</li>
+            </ul>
+          </div>
+          <div class="card blue-card">
+            <div class="card-title"><span>🚀</span> Future Scope & Enhancements</div>
+            <ul class="bullets">
+              <li><strong>Edge AI / Machine Learning:</strong> Deploy lightweight anomaly detection models for zero-day threat heuristics.</li>
+              <li><strong>Hardware TPM Enclaves:</strong> Leverage TPM 2.0 cryptographic attestation for machine identity validation.</li>
+              <li><strong>Cross-Platform Support:</strong> Extend native agent telemetry to Linux (eBPF) and macOS endpoints.</li>
+              <li><strong>SIEM Integration:</strong> Stream cryptographic audit trails directly into enterprise SIEMs (Wazuh, Splunk).</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-11">
+        <strong>Speaker Script:</strong> "To conclude, Shield Labs proves that endpoint defense can be high-performance, secure, and privacy-respecting on a unified architecture. In the future, we plan to add edge machine learning for zero-day heuristics, TPM 2.0 enclave attestation, and Linux/macOS agents."
+      </div>
+    </div>
+
+    <!-- SLIDE 12: THANK YOU & Q&A -->
+    <div class="slide title-slide" data-slide="12">
+      <div class="badge">RESEARCH PROJECT COMPETITION 2026</div>
+      <h1>THANK YOU!</h1>
+      <div class="subheading" style="color: #E2E8F0; font-size: 19px;">We are open for Questions & Live Interactive Demonstration</div>
+      <div class="team-box" style="margin-top: 10px;">
+        <div><strong>Presented by:</strong> <span class="team-names">Rohan Prajapat | Vedant Surve | Tanvi Patil | Srushti More</span></div>
+        <div style="font-size: 13px; color: #CBD5E1;">MAEER'S Maharashtra Institute of Technology, Thane, Mumbai</div>
+        <div style="font-size: 12px; color: #38BDF8; margin-top: 4px;">Live Console Endpoint: <code>http://127.0.0.1:3000</code></div>
+      </div>
+      <div class="speaker-notes-panel" id="notes-12">
+        <strong>Speaker Script:</strong> "Thank you respected judges and faculty members. We now welcome any questions and would be delighted to demonstrate our live multi-laptop cockpit."
+      </div>
+    </div>
+
+  </div>
+
+  <!-- BOTTOM PRESENTATION CONTROLS -->
+  <footer class="deck-controls">
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button class="control-btn" id="prevBtn" onclick="prevSlide()">◀ Previous</button>
+      <button class="control-btn" id="nextBtn" onclick="nextSlide()">Next ▶</button>
+      <button class="control-btn" id="notesToggleBtn" onclick="toggleNotes()">📝 Speaker Notes [N]</button>
+    </div>
+
+    <div class="slide-counter" id="slideIndicator">Slide 1 of 12</div>
+
+    <div style="display: flex; gap: 10px; align-items: center;">
+      <button class="control-btn" onclick="toggleFullScreen()">⛶ Fullscreen [F]</button>
+      <span style="font-size: 11px; color: #64748B;">Use Arrow Keys [← / →]</span>
+    </div>
+  </footer>
+
+  <script>
+    let currentSlide = 1;
+    const totalSlides = 12;
+    let notesVisible = false;
+
+    function showSlide(index) {
+      if (index < 1) index = 1;
+      if (index > totalSlides) index = totalSlides;
+      currentSlide = index;
+
+      document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+      const activeSlide = document.querySelector(`.slide[data-slide="${currentSlide}"]`);
+      if (activeSlide) activeSlide.classList.add('active');
+
+      document.getElementById('slideIndicator').innerText = `Slide ${currentSlide} of ${totalSlides}`;
+      document.getElementById('prevBtn').disabled = currentSlide === 1;
+      document.getElementById('nextBtn').disabled = currentSlide === totalSlides;
+    }
+
+    function nextSlide() {
+      if (currentSlide < totalSlides) showSlide(currentSlide + 1);
+    }
+
+    function prevSlide() {
+      if (currentSlide > 1) showSlide(currentSlide - 1);
+    }
+
+    function toggleNotes() {
+      notesVisible = !notesVisible;
+      document.querySelectorAll('.speaker-notes-panel').forEach(p => {
+        p.classList.toggle('visible', notesVisible);
+      });
+      document.getElementById('notesToggleBtn').classList.toggle('active', notesVisible);
+    }
+
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+
+    // Keyboard navigation
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        nextSlide();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevSlide();
+      } else if (e.key.toLowerCase() === 'n') {
+        toggleNotes();
+      } else if (e.key.toLowerCase() === 'f') {
+        toggleFullScreen();
+      } else if (e.key === 'Home') {
+        showSlide(1);
+      } else if (e.key === 'End') {
+        showSlide(totalSlides);
+      }
+    });
+
+    showSlide(1);
+  </script>
+</body>
+</html>

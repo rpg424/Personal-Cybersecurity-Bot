@@ -20,9 +20,10 @@ import { LoginPage } from './components/LoginPage';
 import { HardwareSafetyInspector } from './components/HardwareSafetyInspector';
 import { FleetManagerView } from './components/FleetManagerView';
 import { SecondUserJoinView } from './components/SecondUserJoinView';
+import { PendingRoleView } from './components/PendingRoleView';
 import { api } from './api/client';
-import { AlertItem, EventEnvelope, PrivacySettings } from './types/security';
-import { AlertTriangle, WifiOff, RefreshCw } from 'lucide-react';
+import { AlertItem, EventEnvelope, PrivacySettings, UserRole } from './types/security';
+import { AlertTriangle, WifiOff, RefreshCw, Lock } from 'lucide-react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,7 +37,7 @@ const queryClient = new QueryClient({
 
 function ConsoleApp() {
   const qc = useQueryClient();
-  const [currentTab, setCurrentTab] = useState<string>('fleet');
+  const [currentTab, setCurrentTab] = useState<string>('home');
   const [selectedAlert, setSelectedAlert] = useState<AlertItem | null>(null);
   const [wizardConfig, setWizardConfig] = useState<{
     isOpen: boolean;
@@ -269,6 +270,26 @@ function ConsoleApp() {
     );
   }
 
+  const currentRole = (authSession?.role || localStorage.getItem('pcb_user_role') || 'ADMIN') as UserRole;
+
+  // Zero-Trust: If user has NO_ROLE assigned, render the restricted Pending Role portal
+  if (currentRole === 'NO_ROLE') {
+    return (
+      <PendingRoleView
+        userName={authSession?.user_name || localStorage.getItem('pcb_user_name') || 'New User'}
+        userEmail={authSession?.email || localStorage.getItem('pcb_user_email') || 'user@shieldlabs.local'}
+        deviceName={authSession?.device_name || localStorage.getItem('pcb_device_name') || 'Local Computer'}
+        onSignOut={handleLockConsole}
+        onRoleElevated={(newRole) => {
+          localStorage.setItem('pcb_user_role', newRole);
+          refetchAuthSession();
+          qc.invalidateQueries({ queryKey: ['auth_session'] });
+          qc.invalidateQueries({ queryKey: ['status'] });
+        }}
+      />
+    );
+  }
+
   const alerts = alertsData?.alerts || [];
   const unresolvedCount = alerts.filter((a) => a.state === 'unresolved').length;
   const isNetworkIsolated = statusData?.label.includes('Panic') || false;
@@ -318,6 +339,8 @@ function ConsoleApp() {
         onOpenAssistant={() => handleAskAssistant()}
         onLockConsole={handleLockConsole}
         unresolvedCount={unresolvedCount}
+        currentRole={currentRole}
+        activeUsersCount={authSession?.active_users_count || 1}
       />
 
       {/* Emergency Network Panic Banner */}
@@ -380,7 +403,27 @@ function ConsoleApp() {
         )}
 
         {currentTab === 'fleet' && (
-          <FleetManagerView />
+          currentRole === 'ADMIN' ? (
+            <FleetManagerView />
+          ) : (
+            <div className="max-w-2xl mx-auto my-16 p-8 bg-white border border-slate-200 rounded-2xl shadow-xs text-center space-y-4">
+              <div className="w-12 h-12 mx-auto rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">Administrator Clearance Required</h2>
+              <p className="text-sm text-slate-600 leading-relaxed max-w-lg mx-auto">
+                Multi-Node Fleet &amp; Remote Laptop Cockpit is reserved for Master Administrators. Your account is authenticated with <span className="font-semibold text-slate-800 uppercase font-mono">{currentRole}</span> clearance.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={() => setCurrentTab('home')}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+                >
+                  Return to System Overview
+                </button>
+              </div>
+            </div>
+          )
         )}
 
         {currentTab === 'alerts' && (
@@ -501,7 +544,12 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const isJoinRoute = currentPath.startsWith('/join') || currentPath.startsWith('/client');
+  const isJoinRoute =
+    currentPath.startsWith('/join') ||
+    currentPath.startsWith('/client') ||
+    (typeof window !== 'undefined' &&
+      (window.location.hash.toLowerCase().includes('join') ||
+        window.location.search.toLowerCase().includes('join')));
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -11,6 +11,9 @@ import {
   LogOut,
   Save,
   KeyRound,
+  Phone,
+  Globe,
+  Lock,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { UserProfile, UserRole } from '../types/security';
@@ -34,13 +37,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     id: localStorage.getItem('pcb_user_id') || 'usr-local',
     fullName: localStorage.getItem('pcb_user_name') || 'Local Administrator',
     email: localStorage.getItem('pcb_user_email') || 'admin@shieldlabs.local',
+    phone: localStorage.getItem('pcb_user_phone') || '',
+    country: localStorage.getItem('pcb_user_country') || '',
     role: (localStorage.getItem('pcb_user_role') as UserRole) || 'ADMIN',
     deviceName: localStorage.getItem('pcb_device_name') || deviceName,
   });
 
   const [fullName, setFullName] = useState(profile.fullName);
   const [email, setEmail] = useState(profile.email);
-  const [role, setRole] = useState<UserRole>(profile.role);
+  const [phone, setPhone] = useState(profile.phone || '');
+  const [country, setCountry] = useState(profile.country || '');
   const [devName, setDevName] = useState(profile.deviceName || deviceName);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -62,7 +68,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             setProfile(data);
             if (data.fullName) setFullName(data.fullName);
             if (data.email) setEmail(data.email);
-            if (data.role) setRole(data.role);
+            if (data.phone) setPhone(data.phone);
+            if (data.country) setCountry(data.country);
             if (data.deviceName) setDevName(data.deviceName);
           }
         })
@@ -70,10 +77,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           // Fallback to local storage values
           const localName = localStorage.getItem('pcb_user_name');
           const localEmail = localStorage.getItem('pcb_user_email');
-          const localRole = localStorage.getItem('pcb_user_role') as UserRole;
+          const localPhone = localStorage.getItem('pcb_user_phone');
+          const localCountry = localStorage.getItem('pcb_user_country');
           if (localName) setFullName(localName);
           if (localEmail) setEmail(localEmail);
-          if (localRole) setRole(localRole);
+          if (localPhone) setPhone(localPhone);
+          if (localCountry) setCountry(localCountry);
         })
         .finally(() => {
           setIsLoading(false);
@@ -109,23 +118,26 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
     setErrorMessage(null);
 
     try {
-      const res = await api.updateUserProfile({
+      await api.updateUserProfile({
         fullName: fullName.trim(),
         email: email.trim(),
-        role,
+        phone: phone.trim(),
+        country: country.trim(),
         deviceName: devName.trim(),
-      });
+      } as any);
 
       localStorage.setItem('pcb_user_name', fullName.trim());
       localStorage.setItem('pcb_user_email', email.trim());
-      localStorage.setItem('pcb_user_role', role);
+      localStorage.setItem('pcb_user_phone', phone.trim());
+      localStorage.setItem('pcb_user_country', country.trim());
       localStorage.setItem('pcb_device_name', devName.trim());
 
       const updatedProf: UserProfile = {
         ...profile,
         fullName: fullName.trim(),
         email: email.trim(),
-        role,
+        phone: phone.trim(),
+        country: country.trim(),
         deviceName: devName.trim(),
       };
       setProfile(updatedProf);
@@ -133,7 +145,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         onProfileUpdated(updatedProf);
       }
 
-      setSuccessMessage('Profile and access role updated successfully.');
+      setSuccessMessage('Profile saved successfully.');
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (err: any) {
       setErrorMessage(err.message || 'Failed to update profile.');
@@ -150,6 +162,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
         return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'AUDITOR':
         return 'bg-purple-100 text-purple-800 border-purple-300';
+      case 'NO_ROLE':
+        return 'bg-amber-100 text-amber-800 border-amber-300';
     }
   };
 
@@ -243,35 +257,63 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               </div>
 
-              {/* Security Role Selector */}
+              {/* Phone Number */}
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Role & Authority</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['ADMIN', 'SECURITY_ANALYST', 'AUDITOR'] as UserRole[]).map((r) => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setRole(r)}
-                      className={`py-2 px-1 text-[11px] font-bold rounded-lg border text-center transition-all ${
-                        role === r
-                          ? 'bg-emerald-50 border-emerald-500 text-emerald-900 ring-1 ring-emerald-500'
-                          : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                      }`}
-                    >
-                      {r === 'ADMIN' ? 'Admin' : r === 'SECURITY_ANALYST' ? 'Analyst' : 'Auditor'}
-                    </button>
-                  ))}
+                <label className="block font-semibold text-slate-700 mb-1">Phone Number</label>
+                <div className="relative">
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="+1 555-0199 / +91 98765 43210"
+                    className="w-full px-3 py-2 pl-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                 </div>
-                <div className="mt-1.5 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600">
-                  {role === 'ADMIN' && (
-                    <span><strong>Administrator:</strong> Full authority to quarantine files, isolate network, configure honey-tokens, and change system settings.</span>
-                  )}
-                  {role === 'SECURITY_ANALYST' && (
-                    <span><strong>Security Analyst:</strong> Authority to triage alerts, inspect fleet threats, and dispatch remediation commands.</span>
-                  )}
-                  {role === 'AUDITOR' && (
-                    <span><strong>Auditor:</strong> Read-only access to verify telemetry, cryptographic proofs, and immutable security audit logs.</span>
-                  )}
+              </div>
+
+              {/* Country */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Country</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={country}
+                    onChange={(e) => setCountry(e.target.value)}
+                    placeholder="e.g. United States, India, Germany"
+                    className="w-full px-3 py-2 pl-9 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                  <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                </div>
+              </div>
+
+              {/* Role & Authority (Strictly Managed by Master Admin) */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Assigned Security Clearance</span>
+                  <span className="text-[10px] text-slate-400 font-normal flex items-center gap-1">
+                    <Lock className="w-3 h-3 text-slate-400" />
+                    Managed by Master Admin
+                  </span>
+                </label>
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold uppercase border ${getRoleBadgeStyle(profile.role)}`}>
+                        {profile.role === 'ADMIN' ? '👑 Master Administrator' : profile.role === 'SECURITY_ANALYST' ? '🛡️ Security Analyst' : profile.role === 'AUDITOR' ? '📋 Compliance Auditor' : 'Restricted (No Role)'}
+                      </span>
+                      {profile.isVerified && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+                          OTP Verified
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {profile.role === 'ADMIN'
+                        ? 'Master Admin has full system control and assigns roles to other users in User Management.'
+                        : 'Your default role is Security Analyst. Only Master Admin can modify clearance roles.'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -298,8 +340,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     <div className="text-slate-500 font-mono">Bound to 127.0.0.1 / Local PC</div>
                   </div>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getRoleBadgeStyle(role)}`}>
-                  {role}
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${getRoleBadgeStyle(profile.role)}`}>
+                  {profile.role}
                 </span>
               </div>
             </>
